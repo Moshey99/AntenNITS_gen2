@@ -117,7 +117,6 @@ class DataPreprocessor:
         all_radiations = np.array(all_radiations)
 
         radiations_mag, radiations_phase = all_radiations[:, :2], all_radiations[:, 2:]
-        radiations_phase = radiations_mag
         assert np.all(radiations_mag >= 0), 'Negative values in radiation magnitude'
         assert np.all(radiations_phase >= 0) and np.all(radiations_phase <= 360), 'Phase values out of range 0-360'
         radiations_phase_radians = np.deg2rad(radiations_phase) - np.pi
