@@ -1,4 +1,6 @@
 import copy
+import shutil
+
 import cv2
 import scipy.io as sio
 from scipy.ndimage import zoom
@@ -45,9 +47,10 @@ class AntennaData:
 
 
 class DataPreprocessor:
-    def __init__(self, folder_path):
-        self.num_data_points = len(os.listdir(folder_path))
-        self.folder_path = folder_path
+    def __init__(self, folder_path=None):
+        if folder_path is not None:
+            self.num_data_points = len(os.listdir(folder_path))
+            self.folder_path = folder_path
 
     def environment_preprocessor(self, debug=False):
         #TODO: add the plane parameter to the environments
@@ -154,23 +157,25 @@ class DataPreprocessor:
 
     @staticmethod
     def assert_radiation_rules(radiation: np.ndarray):
+        eps = 1e-6
         mag_db = radiation[:, :int(radiation.shape[1] / 2)]
         phase_rad = radiation[:, int(radiation.shape[1] / 2):]
         mag_linear = 10 ** (mag_db / 10)
         assert np.all(mag_linear >= 0), 'Negative values in radiation magnitude'
-        assert np.all(phase_rad >= -np.pi) and np.all(
-            phase_rad <= np.pi), 'Phase values out of range -pi - pi radians'
+        assert np.all(phase_rad >= -np.pi-eps) and np.all(
+            phase_rad <= np.pi+eps), 'Phase values out of range -pi - pi radians'
         print('All radiation rules are satisfied!')
         return True
 
     @staticmethod
     def assert_gamma_rules(gamma: np.ndarray):
+        eps = 1e-6
         mag_db = gamma[:, :int(gamma.shape[1] / 2)]
         phase_rad = gamma[:, int(gamma.shape[1] / 2):]
         mag_linear = 10 ** (mag_db / 10)
         assert np.all(mag_linear >= 0), 'Negative values in gamma magnitude'
-        assert np.all(phase_rad >= -np.pi) and np.all(
-            phase_rad <= np.pi), 'Phase values out of range -pi - pi radians'
+        assert np.all(phase_rad >= -np.pi-eps) and np.all(
+            phase_rad <= np.pi+eps), 'Phase values out of range -pi - pi radians'
         print('All gamma rules are satisfied!')
         return True
 
@@ -648,14 +653,49 @@ def gen2_gather_antennas(data_folder1, data_folder2, output_folder):
         print('Antenna saved successfully in:', output_antenna_file)
     print('All antennas saved successfully')
 
+def organize_dataset_per_antenna():
+    antennas_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\gen2_antennas'
+    other_data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\gen2_data.npz'
+    output_folder = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
+    data = np.load(other_data_path)
+    data_frequencies, data_envs, data_gammas, data_radiations = data['frequencies'], data['environments'], data[
+        'gammas'], data['radiations']
+    DataPreprocessor().assert_radiation_rules(data_radiations)
+    DataPreprocessor().assert_gamma_rules(data_gammas)
+    for idx in range(len(data_gammas)):
+        antenna_path = os.path.join(output_folder, str(idx).zfill(5))
+        print('Saving antenna number:', idx, 'to: ', antenna_path)
+        if not os.path.exists(antenna_path):
+            os.makedirs(antenna_path)
+        shutil.copy(src=os.path.join(antennas_path, str(idx), 'antenna.npy'), dst=os.path.join(antenna_path, 'antenna.npy'))
+        shutil.copy(src=os.path.join(antennas_path, str(idx), 'antenna.png'), dst=os.path.join(antenna_path, 'antenna.png'))
+        np.save(os.path.join(antenna_path, 'gamma.npy'), data_gammas[idx])
+        np.save(os.path.join(antenna_path, 'radiation.npy'), data_radiations[idx])
+        np.save(os.path.join(antenna_path, 'environment.npy'), data_envs[idx])
+        if idx == 0:
+            np.save(os.path.join(antenna_path, 'frequencies.npy'), data_frequencies)
+        print('Antenna number:', idx, 'saved successfully')
+    pass
 
+def set_plane_for_env(plane,start,stop):
+    assert plane in ['xz'], 'Plane not supported yet'
+    print('Setting plane for environment: ', plane)
+    antennas_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
+    for idx in range(start,stop):
+        env_path = os.path.join(antennas_path, str(idx).zfill(5), 'environment.npy')
+        env = np.load(env_path)
+        env_with_plane = np.concatenate(([0],env))
+        np.save(env_path, env_with_plane)
+        print('Environment number:', idx, 'saved successfully')
 if __name__ == '__main__':
+    # set_plane_for_env(plane='xz',start=0,stop=15000)
+    # organize_dataset_per_antenna()
     # env_preprocessor = DataPreprocessor(folder_path=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\data_2500x2\models')
     # env_preprocessor.environment_preprocessor(debug=False)
-    data_processor = DataPreprocessor(folder_path=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data"
-                                                  r"\data_15000_3envs\data_2500x2\results")
+    # data_processor = DataPreprocessor(folder_path=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data"
+    #                                               r"\data_15000_3envs\data_2500x2\results")
     # data_processor.gamma_preprocessor(debug=True)
-    data_processor.radiation_preprocessor(plot=False, debug=True)
+    # data_processor.radiation_preprocessor(plot=False, debug=True)
     # data_path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\data_10000x1\processed_data"
     # gamma, radiation = np.load(os.path.join(data_path, 'gammas.npy')), np.load(
     #     os.path.join(data_path, 'radiations.npy'))
@@ -663,11 +703,13 @@ if __name__ == '__main__':
     # data_processor.assert_radiation_rules(radiation)
     # pass
     # run_dxf2img()
-    output_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
-    gen2_gather_antennas(data_folder1=os.path.join(output_path, 'data_10000x1', 'models'),
-                         data_folder2=os.path.join(output_path, 'data_2500x2', 'models'),
-                         output_folder=os.path.join(output_path, 'gen2_antennas'))
-
-    gen2_gather_datasets(data_folder1=os.path.join(output_path, 'data_10000x1', 'processed_data'),
-                         data_folder2=os.path.join(output_path, 'data_2500x2', 'processed_data'),
-                         output_folder=output_path)
+    # output_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
+    # gen2_gather_antennas(data_folder1=os.path.join(output_path, 'data_10000x1', 'models'),
+    #                      data_folder2=os.path.join(output_path, 'data_2500x2', 'models'),
+    #                      output_folder=os.path.join(output_path, 'gen2_antennas'))
+    #
+    # gen2_gather_datasets(data_folder1=os.path.join(output_path, 'data_10000x1', 'processed_data'),
+    #                      data_folder2=os.path.join(output_path, 'data_2500x2', 'processed_data'),
+    #                      output_folder=output_path)
+    # organize_dataset_per_antenna()
+    pass
