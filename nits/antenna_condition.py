@@ -10,18 +10,19 @@ class gamma_radiation_condition(nn.Module):
         self.dropout = nn.Dropout(p=p_drop)
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.radiation_backbone_input_layer = None
-        self.radiation_backbone = nn.Sequential(resnet.ResNetBasicBlock(16, 16),
-                                                resnet.ResNetBasicBlock(16, 16), resnet.ResNetBasicBlock(16, 16),
-                                                nn.Conv2d(16, 32, kernel_size=3), nn.BatchNorm2d(32), self.relu,
-                                                self.maxpool,
-                                                nn.Conv2d(32, 64, kernel_size=3), nn.BatchNorm2d(64), self.relu,
-                                                self.maxpool,
-                                                nn.Conv2d(64, 128, kernel_size=3), nn.BatchNorm2d(128), self.relu,
-                                                self.maxpool,
-                                                nn.Conv2d(128, 256, kernel_size=3), nn.BatchNorm2d(256), self.relu,
-                                                self.maxpool,
-                                                nn.Conv2d(256, 286, kernel_size=3), nn.BatchNorm2d(286), self.relu)
-        self.fc1 = nn.Linear(2504, 1024)
+        self.radiation_backbone = nn.Sequential(resnet.ResNetBasicBlock(16, 16),resnet.ResNetBasicBlock(16, 16),
+                                                nn.Conv2d(16, 32, kernel_size=3,padding=1),
+                                                nn.BatchNorm2d(32), self.relu, self.maxpool,
+                                                nn.Conv2d(32, 64, kernel_size=3,padding=1),
+                                                nn.BatchNorm2d(64), self.relu, self.maxpool,
+                                                nn.Conv2d(64, 128, kernel_size=3,padding=1),
+                                                nn.BatchNorm2d(128), self.relu, self.maxpool,
+                                                nn.Conv2d(128, 256, kernel_size=3, padding=1),
+                                                nn.BatchNorm2d(256), self.relu, self.maxpool,
+                                                nn.Conv2d(256, 500, kernel_size=3, padding=1),
+                                                nn.BatchNorm2d(500), self.relu)
+
+        self.fc1 = nn.Linear(2502, 1024)
         self.fc2 = nn.Linear(1024, condition_dim)
 
     def forward(self, input):
@@ -38,3 +39,10 @@ class gamma_radiation_condition(nn.Module):
         x = self.fc2(x)
 
         return x
+
+if __name__ == "__main__":
+    model = gamma_radiation_condition()
+    gamma = torch.randn(1, 502)
+    radiation = torch.randn(1, 12, 46, 46)
+    output = model((gamma, radiation))
+    print(output.shape)
