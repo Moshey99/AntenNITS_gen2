@@ -27,7 +27,7 @@ def correlation_dist(corr_mat1, corr_mat2):
 
 
 def kl_eval(model, data, n):
-    paths = sorted(glob.glob('models/ANTmodel_*.pth'))
+    paths = sorted(glob.glob('nits_checkpoints/ANTmodel_*.pth'))
     vv = np.linspace(-4, 4, num=7000)
     kl_divs = []
     for path in paths:
@@ -64,7 +64,7 @@ def plot_condition(condition,freqs):
     return fig
 
 def correlation_eval(model, data, n):
-    paths = sorted(glob.glob('models/ANTmodel_*.pth'))
+    paths = sorted(glob.glob('nits_checkpoints/ANTmodel_*.pth'))
     distances = []
     for path in paths:
         print(path)
@@ -233,7 +233,7 @@ def generate_overall_stats(model, data, top_n=5):
     return
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-d', '--dataset', type=str, default='antenna')
+parser.add_argument('-d', '--data_path', type=str, default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
 parser.add_argument('-g', '--gpu', type=str, default='')
 parser.add_argument('-b', '--batch_size', type=int, default=20)
 parser.add_argument('-hi', '--hidden_dim', type=int, default=128)
@@ -289,10 +289,10 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     zero_initialization = False
     weight_norm = False
     default_patience = 10
-    assert args.dataset == 'antenna'
-    data_path = r'../etof_folder_git/AntennaDesign_data/newdata_dB.npz'
+    data_path = args.data_path
     assert os.path.exists(data_path)
-    data_tmp = np.load(data_path)
+    pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
+    antenna_dataset_loader = AntennaDataSetLoader(data_path, batch_size=args.batch_size, pca=pca)
     data = AntennaData()
     data.Data = data_tmp
     data.n_dims = data_tmp['parameters_train'].shape[1]
@@ -369,7 +369,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     if len(devices) > 1:
         model = nn.DataParallel(model, device_ids=[int(i) for i in args.gpu.split(',')])
     n = 150
-    path = 'models\\cond_ANT_model_lr_0.0002_hd_256_cd_512_nr_8_pd_0.9995_bs_30_BEST_GEN1.pth'
+    path = 'nits_checkpoints\\cond_ANT_model_lr_0.0002_hd_256_cd_512_nr_8_pd_0.9995_bs_30_BEST_GEN1.pth'
     distances = []
     print(path)
     folder_to_save = path.split('\\')[1][:-4]
@@ -522,4 +522,4 @@ min_idx_train = np.argmin(lasts_train_ll)
 print(f'best model according to val set: {model_names[min_idx_val]}')
 print(f'best model according to train set: {model_names[min_idx_train]}')
 print('dict_to_print:', dict_to_print)
-# torch.save(best_model.state_dict(), f'models\\ANT_model_{model_extra_string}.pth')
+# torch.save(best_model.state_dict(), f'nits_checkpoints\\ANT_model_{model_extra_string}.pth')

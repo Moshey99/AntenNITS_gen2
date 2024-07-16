@@ -14,6 +14,7 @@ import torch
 import matplotlib.pyplot as plt
 import torch.nn as nn
 from sklearn.neighbors import NearestNeighbors
+from sklearn.decomposition import PCA
 import time
 import trainer
 import losses
@@ -53,7 +54,7 @@ class DataPreprocessor:
             self.folder_path = folder_path
 
     def environment_preprocessor(self, debug=False):
-        #TODO: add the plane parameter to the environments
+        # TODO: add the plane parameter to the environments
         print('Preprocessing environments')
         all_envs = []
         last_env = []
@@ -162,8 +163,8 @@ class DataPreprocessor:
         phase_rad = radiation[:, int(radiation.shape[1] / 2):]
         mag_linear = 10 ** (mag_db / 10)
         assert np.all(mag_linear >= 0), 'Negative values in radiation magnitude'
-        assert np.all(phase_rad >= -np.pi-eps) and np.all(
-            phase_rad <= np.pi+eps), 'Phase values out of range -pi - pi radians'
+        assert np.all(phase_rad >= -np.pi - eps) and np.all(
+            phase_rad <= np.pi + eps), 'Phase values out of range -pi - pi radians'
         print('All radiation rules are satisfied!')
         return True
 
@@ -174,8 +175,8 @@ class DataPreprocessor:
         phase_rad = gamma[:, int(gamma.shape[1] / 2):]
         mag_linear = 10 ** (mag_db / 10)
         assert np.all(mag_linear >= 0), 'Negative values in gamma magnitude'
-        assert np.all(phase_rad >= -np.pi-eps) and np.all(
-            phase_rad <= np.pi+eps), 'Phase values out of range -pi - pi radians'
+        assert np.all(phase_rad >= -np.pi - eps) and np.all(
+            phase_rad <= np.pi + eps), 'Phase values out of range -pi - pi radians'
         print('All gamma rules are satisfied!')
         return True
 
@@ -215,7 +216,7 @@ class DataPreprocessor:
 
     def stp_to_stl(self):
         import trimesh
-        model_folder = 'C:\\Users\\moshey\\PycharmProjects\\etof_folder_git\\AntennaDesign_data\\data_10000x1\\data\\models'
+        model_folder = 'C:\\Users\\moshey\\PycharmProjects\\etof_folder_git\\AntennaDesign_data\\data_10000x1\\data\\nits_checkpoints'
         all = []
         for i in range(10000):
             print('working on antenna number:', i + 1, 'out of:', self.num_data_points)
@@ -226,6 +227,69 @@ class DataPreprocessor:
                                                ("Mesh.MinimumCirclePoints", 32)]))
             mesh.export(os.path.join(model_folder, f'{i}', 'Antenna_PEC_STEP.stl'))
         print('Geometries saved successfully as an stl formated 3D triangle mesh')
+
+
+class AntennaDataSet(torch.utils.data.Dataset):
+    def __init__(self, antenna_folders: list[str], pca: PCA):
+        self.antenna_folders = antenna_folders
+        self.len = len(antenna_folders)
+        self.pca = pca
+        self.antenna_hw = (144, 200)
+        self.ant, self.gam, self.rad, self.env = None, None, None, None
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, idx):
+        antenna_folder = self.antenna_folders[idx]
+        self.load_antenna(antenna_folder)
+        ant_resized = self.resize_antenna()
+        self.ant_embeddings = self.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
+        self.to_tensors()
+        return self.ant_embeddings, self.gam, self.rad, self.env
+
+    def to_tensors(self):
+        self.ant_embeddings = torch.tensor(self.ant_embeddings).float()
+        self.gam = torch.tensor(self.gam).float()
+        self.rad = torch.tensor(self.rad).float()
+        self.env = torch.tensor(self.env).float()
+
+    def resize_antenna(self):
+        h, w = self.antenna_hw
+        return cv2.resize(self.ant, (w, h))
+
+    def load_antenna(self, antenna_folder):
+        self.ant = np.load(os.path.join(antenna_folder, 'antenna.npy'))
+        self.gam = downsample_gamma(np.load(os.path.join(antenna_folder, 'gamma.npy')), rate=4)
+        self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy')), rates=[4, 2])
+        self.env = np.load(os.path.join(antenna_folder, 'environment.npy'))
+
+
+class AntennaDataSetLoader:
+    def __init__(self, dataset_path: str, batch_size: int, pca: PCA, split_ratio=None):
+        if split_ratio is None:
+            split_ratio = [0.8, 0.1, 0.1]
+        self.batch_size = batch_size
+        self.split = split_ratio
+        self.trn_folders, self.val_folders, self.tst_folders = [], [], []
+        self.split_data(dataset_path, split_ratio)
+        self.trn_dataset = AntennaDataSet(self.trn_folders, pca)
+        self.val_dataset = AntennaDataSet(self.val_folders, pca)
+        self.tst_dataset = AntennaDataSet(self.tst_folders, pca)
+        self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=batch_size)
+        self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=batch_size)
+        self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
+
+    def split_data(self, dataset_path, split_ratio):
+        all_folders = glob.glob(os.path.join(dataset_path, '[0-9]' * 5))
+        random.seed(42)
+        random.shuffle(all_folders)
+        trn_len = int(len(all_folders) * split_ratio[0])
+        val_len = int(len(all_folders) * split_ratio[1])
+        tst_len = len(all_folders) - trn_len - val_len
+        self.trn_folders = all_folders[:trn_len]
+        self.val_folders = all_folders[trn_len:trn_len + val_len]
+        self.tst_folders = all_folders[trn_len + val_len:]
 
 
 def create_dataloader(gamma, radiation, params_scaled, batch_size, device, inv_or_forw='inverse'):
@@ -644,7 +708,7 @@ def gen2_gather_antennas(data_folder1, data_folder2, output_folder):
         categorical_img = np.zeros_like(r, dtype=np.uint8)
         categorical_img[np.logical_and(np.logical_and(r == 255, b == 0), g == 0)] = 2  # feed is red
         categorical_img[np.mean(antenna_img, axis=2) > 200] = 1
-        output_antenna_folder = os.path.join(output_folder,os.path.basename(Path(file).parent))
+        output_antenna_folder = os.path.join(output_folder, os.path.basename(Path(file).parent))
         if not os.path.exists(output_antenna_folder):
             os.makedirs(output_antenna_folder)
         output_antenna_file = os.path.join(output_antenna_folder, 'antenna.npy')
@@ -652,6 +716,7 @@ def gen2_gather_antennas(data_folder1, data_folder2, output_folder):
         cv2.imwrite(os.path.join(output_antenna_folder, 'antenna.png'), antenna_img)
         print('Antenna saved successfully in:', output_antenna_file)
     print('All antennas saved successfully')
+
 
 def organize_dataset_per_antenna():
     antennas_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\gen2_antennas'
@@ -667,8 +732,10 @@ def organize_dataset_per_antenna():
         print('Saving antenna number:', idx, 'to: ', antenna_path)
         if not os.path.exists(antenna_path):
             os.makedirs(antenna_path)
-        shutil.copy(src=os.path.join(antennas_path, str(idx), 'antenna.npy'), dst=os.path.join(antenna_path, 'antenna.npy'))
-        shutil.copy(src=os.path.join(antennas_path, str(idx), 'antenna.png'), dst=os.path.join(antenna_path, 'antenna.png'))
+        shutil.copy(src=os.path.join(antennas_path, str(idx), 'antenna.npy'),
+                    dst=os.path.join(antenna_path, 'antenna.npy'))
+        shutil.copy(src=os.path.join(antennas_path, str(idx), 'antenna.png'),
+                    dst=os.path.join(antenna_path, 'antenna.png'))
         np.save(os.path.join(antenna_path, 'gamma.npy'), data_gammas[idx])
         np.save(os.path.join(antenna_path, 'radiation.npy'), data_radiations[idx])
         np.save(os.path.join(antenna_path, 'environment.npy'), data_envs[idx])
@@ -677,20 +744,30 @@ def organize_dataset_per_antenna():
         print('Antenna number:', idx, 'saved successfully')
     pass
 
-def set_plane_for_env(plane,start,stop):
+
+def set_plane_for_env(plane, start, stop):
     assert plane in ['xz'], 'Plane not supported yet'
     print('Setting plane for environment: ', plane)
     antennas_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
-    for idx in range(start,stop):
+    for idx in range(start, stop):
         env_path = os.path.join(antennas_path, str(idx).zfill(5), 'environment.npy')
         env = np.load(env_path)
-        env_with_plane = np.concatenate(([0],env))
+        env_with_plane = np.concatenate(([0], env))
         np.save(env_path, env_with_plane)
         print('Environment number:', idx, 'saved successfully')
+
+
 if __name__ == '__main__':
+    data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
+    ant_folders = [os.path.join(data_path, str(i).zfill(5)) for i in range(100)]
+    pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
+    train_set = AntennaDataSet(ant_folders, pca)
+    data_loader = torch.utils.data.DataLoader(train_set, batch_size=10, shuffle=True)
+    for i, data in enumerate(data_loader):
+        print(data)
     # set_plane_for_env(plane='xz',start=0,stop=15000)
     # organize_dataset_per_antenna()
-    # env_preprocessor = DataPreprocessor(folder_path=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\data_2500x2\models')
+    # env_preprocessor = DataPreprocessor(folder_path=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\data_2500x2\nits_checkpoints')
     # env_preprocessor.environment_preprocessor(debug=False)
     # data_processor = DataPreprocessor(folder_path=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data"
     #                                               r"\data_15000_3envs\data_2500x2\results")
@@ -704,8 +781,8 @@ if __name__ == '__main__':
     # pass
     # run_dxf2img()
     # output_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
-    # gen2_gather_antennas(data_folder1=os.path.join(output_path, 'data_10000x1', 'models'),
-    #                      data_folder2=os.path.join(output_path, 'data_2500x2', 'models'),
+    # gen2_gather_antennas(data_folder1=os.path.join(output_path, 'data_10000x1', 'nits_checkpoints'),
+    #                      data_folder2=os.path.join(output_path, 'data_2500x2', 'nits_checkpoints'),
     #                      output_folder=os.path.join(output_path, 'gen2_antennas'))
     #
     # gen2_gather_datasets(data_folder1=os.path.join(output_path, 'data_10000x1', 'processed_data'),

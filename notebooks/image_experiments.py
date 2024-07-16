@@ -41,7 +41,7 @@ if __name__ == '__main__':
                         default='', help='GPU to use')
     parser.add_argument('-i', '--data_dir', type=str,
                         default='/data/datasets/', help='Location for the dataset')
-    parser.add_argument('-o', '--save_dir', type=str, default='models',
+    parser.add_argument('-o', '--save_dir', type=str, default='nits_checkpoints',
                         help='Location for parameter checkpoints and samples')
     parser.add_argument('-d', '--dataset', type=str,
                         default='mnist', help='Can be either cifar|mnist')
@@ -266,7 +266,7 @@ if __name__ == '__main__':
     scheduler = lr_scheduler.StepLR(optimizer, step_size=1, gamma=args.lr_decay)
 
     if args.load_epoch > 0:
-        load_path = '/data/image_model/models/{}_{}.pth'.format(model_name, args.load_epoch)
+        load_path = '/data/image_model/nits_checkpoints/{}_{}.pth'.format(model_name, args.load_epoch)
         print("loading parameters from path =", load_path)
         load_part_of_model(model, load_path, 'cpu')
         print('model parameters loaded')
@@ -353,6 +353,6 @@ if __name__ == '__main__':
                     nrow=5, padding=0)
 
         if (epoch + 1) % args.save_interval == 0:
-            save_path = 'models/{}_{}.pth'.format(model_name, epoch)
+            save_path = 'nits_checkpoints/{}_{}.pth'.format(model_name, epoch)
             print("saving model to {}".format(save_path))
             torch.save(model.state_dict(), save_path)
