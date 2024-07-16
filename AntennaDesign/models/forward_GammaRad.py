@@ -4,8 +4,10 @@ from models import baseline_regressor, forward_radiation
 
 
 class forward_GammaRad(nn.Module):
-    def __init__(self, radiation_channels, gamma_model=None, radiation_model=None, rad_range=[-55, 5]):
+    def __init__(self, radiation_channels, gamma_model=None, radiation_model=None, rad_range=None):
         super(forward_GammaRad, self).__init__()
+        if rad_range is None:
+            rad_range = [-55, 5]
         if gamma_model is None:
             self.gamma_net = baseline_regressor.small_deeper_baseline_forward_model()
         else:
