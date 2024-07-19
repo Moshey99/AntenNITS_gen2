@@ -48,8 +48,8 @@ class Radiation_Generator(nn.Module):
             self.output_layer = nn.ConvTranspose2d(4, self.radiation_channels, kernel_size=3, stride=1, padding=1)
         x = self.output_layer(x)
         sep = x.shape[1]//2
-        x[:,:sep,:,:] = self.sigmoid(x[:,:sep,:,:])*self.length + self.radiation_range[0] # Normalize to radiation_range
-        x[:,sep:,:,:] = self.sigmoid(x[:,sep:,:,:])*2*torch.pi-torch.pi # Normalize to [-pi,pi]
+        x[:,:sep,:,:] = self.sigmoid(x[:,:sep,:,:])*self.length + self.radiation_range[0]  # Normalize to rad_range
+        x[:,sep:,:,:] = self.sigmoid(x[:,sep:,:,:])*2*torch.pi-torch.pi  # Normalize to [-pi,pi]
         return x
 
 
