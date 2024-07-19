@@ -28,6 +28,15 @@ def arg_parser():
     parser.add_argument('--patience', type=int, default=7, help='early stopping patience')
     return parser.parse_args()
 
+def save_embeddings(pca, data_path):
+    for i in range(0, 15000):
+        if os.path.exists(os.path.join(data_path, str(i).zfill(5), 'embeddings.npy')):
+            continue
+        antenna = np.load(os.path.join(data_path, str(i).zfill(5), 'antenna.npy'))
+        ant_resized = cv2.resize(antenna, (200, 144))
+        embeddings = pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
+        np.save(os.path.join(data_path, str(i).zfill(5), 'embeddings.npy'), embeddings)
+        print(f'Saved embeddings for antenna {i}.')
 
 if __name__ == "__main__":
 
@@ -35,7 +44,8 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
     pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
-    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, pca=pca)
+    save_embeddings(pca, args.data_path)
+    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, pca=pca, try_cache=True)
     model = forward_GammaRad(radiation_channels=12)
     loss_fn = GammaRad_loss(geo_weight=args.geo_weight)
     model.to(device)
@@ -53,20 +63,6 @@ if __name__ == "__main__":
         envs = EnvironmentScalerLoader(antenna_dataset_loader).load_environments()
         scaler_manager.fit(envs)
         scaler_manager.dump()
-    if os.path.exists(os.path.join(args.data_path, 'env_scaler.pkl')):
-        env_scaler = pickle.load(open(os.path.join(args.data_path, 'env_scaler.pkl'), 'rb'))
-    else:
-        print('Fitting environment scaler.')
-        env_scaler = standard_scaler()
-        envs = []
-        for i, X in enumerate(antenna_dataset_loader.trn_loader):
-            print(f'Loaded {i} batches for environment scaler') if i % 10 == 0 else None
-            _, _, _, env = X
-            envs.append(env)
-        envs = torch.cat(envs, dim=0).detach().cpu().numpy()
-        env_scaler.fit(envs)
-        pickle.dump(env_scaler, open(os.path.join(args.data_path, 'env_scaler.pkl'), 'wb'))
-        print(f'Environment scaler fitted and saved in: {os.path.join(args.data_path, "env_scaler.pkl")}')
     while keep_training:
         if epoch % 10 == 0 and epoch > 0:
             print(f'Saving model at epoch {epoch}')
@@ -74,13 +70,10 @@ if __name__ == "__main__":
 
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
-        start = time.time()
         for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
-            stop = time.time()
-            print(f'Batch {idx} loading took {stop - start} seconds')
             EMBEDDINGS, GAMMA, RADIATION, ENV = sample
             embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-                env_scaler.forward(ENV).to(device)
+                scaler_manager.scaler.forward(ENV).to(device)
             geometry = torch.cat((embeddings, env), dim=1)
             target = (gamma, radiation)
             optimizer.zero_grad()
@@ -91,8 +84,7 @@ if __name__ == "__main__":
             train_loss += loss.item()
             optimizer.step()
             if idx % 100 == 0:
-                print(f'Epoch: {epoch}, Batch: {idx}, Loss: {train_loss / 100}')
-            start = time.time()
+                print(f'Epoch: {epoch}, Batch: {idx}, Loss: {train_loss / (idx + 1)}')
         print(f'End Epoch: {epoch}, Loss: {train_loss / len(antenna_dataset_loader.trn_loader)}')
         epoch += 1
         lr = optimizer.param_groups[0]['lr']
@@ -103,7 +95,7 @@ if __name__ == "__main__":
             for idx, sample in enumerate(antenna_dataset_loader.val_loader):
                 EMBEDDINGS, GAMMA, RADIATION, ENV = sample
                 embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-                    env_scaler.forward(ENV).to(device)
+                    scaler_manager.scaler.forward(ENV).to(device)
                 geometry = torch.cat((embeddings, env), dim=1)
                 target = (gamma, radiation)
                 gamma_pred, rad_pred = model(geometry)

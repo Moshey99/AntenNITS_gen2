@@ -230,12 +230,13 @@ class DataPreprocessor:
 
 
 class AntennaDataSet(torch.utils.data.Dataset):
-    def __init__(self, antenna_folders: list[str], pca: PCA):
+    def __init__(self, antenna_folders: list[str], pca: PCA, try_cache: bool):
         self.antenna_folders = antenna_folders
         self.len = len(antenna_folders)
         self.pca = pca
+        self.try_cache = try_cache
         self.antenna_hw = (144, 200)
-        self.ant, self.gam, self.rad, self.env = None, None, None, None
+        self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
 
     def __len__(self):
         return self.len
@@ -244,12 +245,13 @@ class AntennaDataSet(torch.utils.data.Dataset):
         antenna_folder = self.antenna_folders[idx]
         self.load_antenna(antenna_folder)
         ant_resized = self.resize_antenna()
-        self.ant_embeddings = self.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
+        if self.embeddings is None:
+            self.embeddings = self.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
         self.to_tensors()
-        return self.ant_embeddings, self.gam, self.rad, self.env
+        return self.embeddings, self.gam, self.rad, self.env
 
     def to_tensors(self):
-        self.ant_embeddings = torch.tensor(self.ant_embeddings).float()
+        self.embeddings = torch.tensor(self.embeddings).float()
         self.gam = torch.tensor(self.gam).float()
         self.rad = torch.tensor(self.rad).float()
         self.env = torch.tensor(self.env).float()
@@ -264,19 +266,22 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy'))[np.newaxis],
                                         rates=[4, 2]).squeeze()
         self.env = np.load(os.path.join(antenna_folder, 'environment.npy'))
+        if self.try_cache and os.path.exists(os.path.join(antenna_folder, 'embeddings.npy')):
+            self.embeddings = np.load(os.path.join(antenna_folder, 'embeddings.npy'))
+
 
 
 class AntennaDataSetsLoader:
-    def __init__(self, dataset_path: str, batch_size: int, pca: PCA, split_ratio=None):
+    def __init__(self, dataset_path: str, batch_size: int, pca: PCA, split_ratio=None, try_cache=True):
         if split_ratio is None:
             split_ratio = [0.8, 0.1, 0.1]
         self.batch_size = batch_size
         self.split = split_ratio
         self.trn_folders, self.val_folders, self.tst_folders = [], [], []
         self.split_data(dataset_path, split_ratio)
-        self.trn_dataset = AntennaDataSet(self.trn_folders, pca)
-        self.val_dataset = AntennaDataSet(self.val_folders, pca)
-        self.tst_dataset = AntennaDataSet(self.tst_folders, pca)
+        self.trn_dataset = AntennaDataSet(self.trn_folders, pca, try_cache)
+        self.val_dataset = AntennaDataSet(self.val_folders, pca, try_cache)
+        self.tst_dataset = AntennaDataSet(self.tst_folders, pca, try_cache)
         self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=batch_size)
         self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=batch_size)
         self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
@@ -288,9 +293,9 @@ class AntennaDataSetsLoader:
         trn_len = int(len(all_folders) * split_ratio[0])
         val_len = int(len(all_folders) * split_ratio[1])
         tst_len = len(all_folders) - trn_len - val_len
-        self.trn_folders = all_folders[:trn_len]
-        self.val_folders = all_folders[trn_len:trn_len + val_len]
-        self.tst_folders = all_folders[trn_len + val_len:]
+        self.trn_folders = sorted(all_folders[:trn_len])
+        self.val_folders = sorted(all_folders[trn_len:trn_len + val_len])
+        self.tst_folders = sorted(all_folders[trn_len + val_len:])
 
 
 def create_dataloader(gamma, radiation, params_scaled, batch_size, device, inv_or_forw='inverse'):
