@@ -46,7 +46,7 @@ def main():
     loss_fn = gamma_loss_dB(mag_smooth_weight=1e-3,phase_smooth_weight=1e-3)
     model.to(device)
     model.load_state_dict(torch.load(args.model_path,map_location=device))
-    scaler = StandardScaler()
+    scaler = standard_scaler()
     scaler.fit(train_params)
     train_params_scaled = scaler.forward(train_params)
     val_params_scaled = scaler.forward(val_params)

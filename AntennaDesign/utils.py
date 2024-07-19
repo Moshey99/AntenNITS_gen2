@@ -1,6 +1,6 @@
 import copy
 import shutil
-from typing import Optional
+from typing import Union
 import cv2
 import scipy.io as sio
 from scipy.ndimage import zoom
@@ -415,7 +415,7 @@ def create_dataset(dataset_path=r'C:\Users\moshey\PycharmProjects\etof_folder_gi
     print(f'Dataset created seccessfully. Saved in newdata.npz')
 
 
-class StandardScaler:
+class standard_scaler:
     def __init__(self):
         self.mean = None
         self.std = None
@@ -437,14 +437,15 @@ class StandardScaler:
 class ScalerManager:
     def __init__(self, path: str):
         self.path = path
-        self.scaler = StandardScaler()
+        self.scaler = None
 
     def try_loading_from_cache(self):
         if os.path.exists(self.path):
-            self.scaler = pickle.load(open(self.path, 'rb'))
+            cache_scaler = pickle.load(open(self.path, 'rb'))
+            self.scaler = cache_scaler
             print(f'Cached scaler loaded from: {self.path}')
 
-    def fit(self, data: Optional[torch.tensor, np.ndarray]):
+    def fit(self, data: Union[torch.tensor, np.ndarray]):
         self.scaler.fit(data)
         print(f'Scaler fitted')
 
@@ -454,7 +455,7 @@ class ScalerManager:
 
 
 class EnvironmentScalerLoader:
-    def __init__(self, antenna_data_loader: torch.utis.data.DataLoader):
+    def __init__(self, antenna_data_loader: torch.utils.data.DataLoader):
         self.antenna_data_loader = antenna_data_loader
 
     def load_environments(self):
@@ -576,7 +577,7 @@ def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
     return mean_abs_error_mag, max_diff_mag, msssim_vals
 
 
-def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: StandardScaler):
+def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
     import scipy.io as sio
     antenna = antenna.detach().cpu().numpy()
     antenna_unscaled = scaler.inverse(antenna)

@@ -296,7 +296,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     data = AntennaData()
     data.Data = data_tmp
     data.n_dims = data_tmp['parameters_train'].shape[1]
-    scaler = StandardScaler()
+    scaler = standard_scaler()
     scaler.fit(data_tmp['parameters_train'])
     train_params_scaled = scaler.forward(data_tmp['parameters_train'])
     val_params_scaled = scaler.forward(data_tmp['parameters_val'])

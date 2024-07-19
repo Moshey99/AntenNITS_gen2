@@ -57,7 +57,7 @@ if __name__ == "__main__":
         env_scaler = pickle.load(open(os.path.join(args.data_path, 'env_scaler.pkl'), 'rb'))
     else:
         print('Fitting environment scaler.')
-        env_scaler = StandardScaler()
+        env_scaler = standard_scaler()
         envs = []
         for i, X in enumerate(antenna_dataset_loader.trn_loader):
             print(f'Loaded {i} batches for environment scaler') if i % 10 == 0 else None
@@ -74,7 +74,10 @@ if __name__ == "__main__":
 
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
+        start = time.time()
         for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
+            stop = time.time()
+            print(f'Batch {idx} loading took {stop - start} seconds')
             EMBEDDINGS, GAMMA, RADIATION, ENV = sample
             embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
                 env_scaler.forward(ENV).to(device)
@@ -89,6 +92,7 @@ if __name__ == "__main__":
             optimizer.step()
             if idx % 100 == 0:
                 print(f'Epoch: {epoch}, Batch: {idx}, Loss: {train_loss / 100}')
+            start = time.time()
         print(f'End Epoch: {epoch}, Loss: {train_loss / len(antenna_dataset_loader.trn_loader)}')
         epoch += 1
         lr = optimizer.param_groups[0]['lr']
