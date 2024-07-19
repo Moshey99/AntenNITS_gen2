@@ -424,7 +424,10 @@ class standard_scaler():
         self.std = np.std(data, axis=0)
 
     def forward(self, input):
-        return (input - self.mean) / self.std
+        std_mask = self.std == 0
+        std_copy = self.std.copy()
+        std_copy[std_mask] = 1
+        return (input - self.mean) / std_copy
 
     def inverse(self, input):
         return input * self.std + self.mean
