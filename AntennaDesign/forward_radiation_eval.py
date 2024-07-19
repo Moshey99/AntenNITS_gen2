@@ -46,7 +46,7 @@ def main():
     loss_fn = None
     model.to(device)
     model.load_state_dict(torch.load(args.model_path,map_location=device))
-    scaler = standard_scaler()
+    scaler = StandardScaler()
     scaler.fit(train_params)
     train_params_scaled = scaler.forward(train_params)
     val_params_scaled = scaler.forward(val_params)

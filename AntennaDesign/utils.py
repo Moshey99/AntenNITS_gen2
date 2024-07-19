@@ -1,6 +1,6 @@
 import copy
 import shutil
-
+from typing import Optional
 import cv2
 import scipy.io as sio
 from scipy.ndimage import zoom
@@ -261,11 +261,12 @@ class AntennaDataSet(torch.utils.data.Dataset):
     def load_antenna(self, antenna_folder):
         self.ant = np.load(os.path.join(antenna_folder, 'antenna.npy'))
         self.gam = downsample_gamma(np.load(os.path.join(antenna_folder, 'gamma.npy'))[np.newaxis], rate=4).squeeze()
-        self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy'))[np.newaxis], rates=[4, 2]).squeeze()
+        self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy'))[np.newaxis],
+                                        rates=[4, 2]).squeeze()
         self.env = np.load(os.path.join(antenna_folder, 'environment.npy'))
 
 
-class AntennaDataSetLoader:
+class AntennaDataSetsLoader:
     def __init__(self, dataset_path: str, batch_size: int, pca: PCA, split_ratio=None):
         if split_ratio is None:
             split_ratio = [0.8, 0.1, 0.1]
@@ -414,7 +415,7 @@ def create_dataset(dataset_path=r'C:\Users\moshey\PycharmProjects\etof_folder_gi
     print(f'Dataset created seccessfully. Saved in newdata.npz')
 
 
-class standard_scaler():
+class StandardScaler:
     def __init__(self):
         self.mean = None
         self.std = None
@@ -423,42 +424,46 @@ class standard_scaler():
         self.mean = np.mean(data, axis=0)
         self.std = np.std(data, axis=0)
 
-    def forward(self, input):
+    def forward(self, data):
         std_mask = self.std == 0
         std_copy = self.std.copy()
         std_copy[std_mask] = 1
-        return (input - self.mean) / std_copy
+        return (data - self.mean) / std_copy
 
-    def inverse(self, input):
-        return input * self.std + self.mean
-
-
-def display_gamma(gamma):
-    gamma_real = gamma[:int(gamma.shape[0] / 2)]
-    gamma_imag = gamma[int(gamma.shape[0] / 2):]
-    gamma_mag = np.sqrt(gamma_real ** 2 + gamma_imag ** 2)
-    gamma_phase = np.arctan2(gamma_imag, gamma_real)
-    plt.figure()
-    plt.plot(np.arange(len(gamma_mag)), gamma_mag)
-    plt.show()
+    def inverse(self, data):
+        return data * self.std + self.mean
 
 
-def display_losses(train_loss, val_loss):
-    plt.figure()
-    plt.plot(np.arange(len(train_loss)), train_loss, label='train loss')
-    plt.plot(np.arange(len(val_loss)), val_loss, label='val loss')
-    plt.legend()
-    plt.show()
+class ScalerManager:
+    def __init__(self, path: str):
+        self.path = path
+        self.scaler = StandardScaler()
+
+    def try_loading_from_cache(self):
+        if os.path.exists(self.path):
+            self.scaler = pickle.load(open(self.path, 'rb'))
+            print(f'Cached scaler loaded from: {self.path}')
+
+    def fit(self, data: Optional[torch.tensor, np.ndarray]):
+        self.scaler.fit(data)
+        print(f'Scaler fitted')
+
+    def dump(self):
+        pickle.dump(self.scaler, open(self.path, 'wb'))
+        print(f'Fitted scaler saved in: {self.path}')
 
 
-def display_gradients_norm(model):
-    total_norm = 0
-    parameters = [p for p in model.parameters() if p.grad is not None and p.requires_grad]
-    for p in parameters:
-        param_norm = p.grad.detach().data.norm(2)
-        total_norm += param_norm.item() ** 2
-    total_norm = total_norm ** 0.5
-    return total_norm
+class EnvironmentScalerLoader:
+    def __init__(self, antenna_data_loader: torch.utis.data.DataLoader):
+        self.antenna_data_loader = antenna_data_loader
+
+    def load_environments(self):
+        envs = []
+        for i, X in enumerate(self.antenna_data_loader.trn_loader):
+            _, _, _, env = X
+            envs.append(env)
+        envs = torch.cat(envs, dim=0).detach().cpu().numpy()
+        return envs
 
 
 def downsample_gamma(gamma, rate=4):
@@ -475,15 +480,6 @@ def downsample_radiation(radiation, rates=[4, 2]):
     first_dim_rate, second_dim_rate = rates
     radiation_downsampled = radiation[:, :, ::first_dim_rate, ::second_dim_rate]
     return radiation_downsampled
-
-
-def normalize_radiation(radiation, rad_range=[-55, 5]):
-    min_val, max_val = rad_range[0], rad_range[1]
-    radiation_mag = radiation[:, :int(radiation.shape[1] / 2)]
-    radiation_mag = np.clip(radiation_mag, min_val, max_val)
-    radiation_mag = (radiation_mag - min_val) / (max_val - min_val)
-    radiation[:, :int(radiation.shape[1] / 2)] = radiation_mag
-    return radiation
 
 
 def convert_dataset_to_dB(data):
@@ -580,7 +576,7 @@ def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
     return mean_abs_error_mag, max_diff_mag, msssim_vals
 
 
-def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
+def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: StandardScaler):
     import scipy.io as sio
     antenna = antenna.detach().cpu().numpy()
     antenna_unscaled = scaler.inverse(antenna)

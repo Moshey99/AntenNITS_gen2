@@ -4,7 +4,7 @@ import argparse
 from sklearn.model_selection import GridSearchCV
 from skorch import NeuralNetRegressor
 import utils
-from utils import standard_scaler, create_dataset, split_dataset,create_dataloader
+from utils import StandardScaler, create_dataset, split_dataset,create_dataloader
 from models import baseline_regressor, inverse_hypernet
 import torch
 import trainer
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     val_params, val_gamma, val_radiation = data['parameters_val'], data['gamma_val'], data['radiation_val']
     test_params, test_gamma, test_radiation = data['parameters_test'], data['gamma_test'], data['radiation_test']
 
-    scaler = standard_scaler()
+    scaler = StandardScaler()
     scaler.fit(train_params)
     train_params_scaled = scaler.forward(train_params)
     val_params_scaled = scaler.forward(val_params)

@@ -292,11 +292,11 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     data_path = args.data_path
     assert os.path.exists(data_path)
     pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-    antenna_dataset_loader = AntennaDataSetLoader(data_path, batch_size=args.batch_size, pca=pca)
+    antenna_datasets_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size, pca=pca)
     data = AntennaData()
     data.Data = data_tmp
     data.n_dims = data_tmp['parameters_train'].shape[1]
-    scaler = standard_scaler()
+    scaler = StandardScaler()
     scaler.fit(data_tmp['parameters_train'])
     train_params_scaled = scaler.forward(data_tmp['parameters_train'])
     val_params_scaled = scaler.forward(data_tmp['parameters_val'])

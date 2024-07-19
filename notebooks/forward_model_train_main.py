@@ -33,8 +33,9 @@ if __name__ == "__main__":
 
     args = arg_parser()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(args, device)
     pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
-    antenna_dataset_loader = AntennaDataSetLoader(args.data_path, batch_size=args.batch_size, pca=pca)
+    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, pca=pca)
     model = forward_GammaRad(radiation_channels=12)
     loss_fn = GammaRad_loss(geo_weight=args.geo_weight)
     model.to(device)
@@ -45,11 +46,18 @@ if __name__ == "__main__":
     patience = args.patience
     best_loss = np.inf
     train_loss = 0
+    scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+    scaler_manager.try_loading_from_cache()
+    if scaler_manager.scaler is None:
+        print('Fitting environment scaler.')
+        envs = EnvironmentScalerLoader(antenna_dataset_loader).load_environments()
+        scaler_manager.fit(envs)
+        scaler_manager.dump()
     if os.path.exists(os.path.join(args.data_path, 'env_scaler.pkl')):
         env_scaler = pickle.load(open(os.path.join(args.data_path, 'env_scaler.pkl'), 'rb'))
     else:
         print('Fitting environment scaler.')
-        env_scaler = standard_scaler()
+        env_scaler = StandardScaler()
         envs = []
         for i, X in enumerate(antenna_dataset_loader.trn_loader):
             print(f'Loaded {i} batches for environment scaler') if i % 10 == 0 else None

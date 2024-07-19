@@ -2,7 +2,7 @@ import numpy as np
 import argparse
 import pytorch_msssim
 import utils
-from utils import standard_scaler, create_dataset, split_dataset, create_dataloader
+from utils import StandardScaler, create_dataset, split_dataset, create_dataloader
 from models import baseline_regressor, inverse_hypernet, forward_radiation,forward_GammaRad, inverse_transformer,forward_gamma
 import torch
 import trainer
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     train_params, train_gamma, train_radiation = data['parameters_train'], data['gamma_train'], data['radiation_train']
     val_params, val_gamma, val_radiation = data['parameters_val'], data['gamma_val'], data['radiation_val']
     test_params, test_gamma, test_radiation = data['parameters_test'], data['gamma_test'], data['radiation_test']
-    scaler = standard_scaler()
+    scaler = StandardScaler()
     scaler.fit(train_params)
     train_params_scaled = scaler.forward(train_params)
     val_params_scaled = scaler.forward(val_params)
