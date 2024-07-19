@@ -87,7 +87,7 @@ class small_deeper_baseline_forward_model(nn.Module):
 
     def forward(self, input):  # input is the geometric parameters
         if self.input_layer is None:
-            self.input_layer = nn.Sequential(nn.Linear(input.shape[1], 1024), self.elu)
+            self.input_layer = nn.Sequential(nn.Linear(input.shape[1], 1024), self.elu).to(input.device)
         x = self.input_layer(input)
         x = self.elu(self.fc2(x))  # Apply ReLU activation
         x = self.elu(self.fc3(x))  # Apply ReLU activation

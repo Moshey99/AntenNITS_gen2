@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+
 class Radiation_Generator(nn.Module):
     def __init__(self, radiation_channels, radiation_range=None):
         super(Radiation_Generator, self).__init__()
         if radiation_range is None:
             radiation_range = [-55, 5]
         self.activation = nn.ELU()
-        self.length = radiation_range[1]-radiation_range[0]
+        self.length = radiation_range[1] - radiation_range[0]
         self.radiation_range = radiation_range
         self.radiation_channels = radiation_channels
         # Input layer for geometrical features
@@ -40,16 +41,18 @@ class Radiation_Generator(nn.Module):
 
     def forward(self, x):
         if self.input_layer is None:
-            self.input_layer = nn.Sequential(nn.Linear(x.shape[1], 1024), nn.ELU())
+            self.input_layer = nn.Sequential(nn.Linear(x.shape[1], 1024), nn.ELU()).to(x.device)
         x = self.input_layer(x)
         x = x.view(x.size(0), 1024, 1, 1)  # Reshape to match the convolutional layers
         x = self.layers(x)
         if self.output_layer is None:
-            self.output_layer = nn.ConvTranspose2d(4, self.radiation_channels, kernel_size=3, stride=1, padding=1)
+            self.output_layer = nn.ConvTranspose2d(4, self.radiation_channels, kernel_size=3, stride=1, padding=1).to(
+                x.device)
         x = self.output_layer(x)
-        sep = x.shape[1]//2
-        x[:,:sep,:,:] = self.sigmoid(x[:,:sep,:,:])*self.length + self.radiation_range[0]  # Normalize to rad_range
-        x[:,sep:,:,:] = self.sigmoid(x[:,sep:,:,:])*2*torch.pi-torch.pi  # Normalize to [-pi,pi]
+        sep = x.shape[1] // 2
+        x[:, :sep, :, :] = self.sigmoid(x[:, :sep, :, :]) * self.length + self.radiation_range[
+            0]  # Normalize to rad_range
+        x[:, sep:, :, :] = self.sigmoid(x[:, sep:, :, :]) * 2 * torch.pi - torch.pi  # Normalize to [-pi,pi]
         return x
 
 
