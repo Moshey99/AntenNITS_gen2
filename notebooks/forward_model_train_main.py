@@ -52,16 +52,18 @@ if __name__ == "__main__":
         env_scaler = standard_scaler()
         envs = []
         for i, X in enumerate(antenna_dataset_loader.trn_loader):
-            if i==5:
-                break
             print(f'Loaded {i} batches for environment scaler') if i % 10 == 0 else None
             _, _, _, env = X
             envs.append(env)
         envs = torch.cat(envs, dim=0).detach().cpu().numpy()
         env_scaler.fit(envs)
         pickle.dump(env_scaler, open(os.path.join(args.data_path, 'env_scaler.pkl'), 'wb'))
-        print(f'Environment scaler fitted and saved in:  .')
+        print(f'Environment scaler fitted and saved in: {os.path.join(args.data_path, "env_scaler.pkl")}')
     while keep_training:
+        if epoch % 10 == 0 and epoch > 0:
+            print(f'Saving model at epoch {epoch}')
+            torch.save(model.state_dict(), args.checkpoint_path.replace('.pth', f'_epoch{epoch}.pth'))
+
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
         for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
@@ -109,8 +111,8 @@ if __name__ == "__main__":
                 print('Early stopping - stayed at the same loss for too long.')
                 keep_training = False
             train_loss = 0
-    torch.save(best_model.state_dict(), args.checkpoint_path)
-    torch.save(best_model, args.checkpoint_path.replace('.pth', '_instance.pth'))
+    torch.save(best_model.state_dict(), args.checkpoint_path.replace('.pth', '_best_dict.pth'))
+    torch.save(best_model, args.checkpoint_path.replace('.pth', '_best_instance.pth'))
     print('Training finished.')
     print(f'Best loss: {best_loss}')
     print(f'Best model saved at: {args.checkpoint_path}')
