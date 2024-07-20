@@ -248,7 +248,9 @@ class AntennaDataSet(torch.utils.data.Dataset):
         if self.embeddings is None:
             self.embeddings = self.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
         self.to_tensors()
-        return self.embeddings, self.gam, self.rad, self.env
+        embs = self.embeddings.detach().clone()
+        self.embeddings = None
+        return embs, self.gam, self.rad, self.env
 
     def to_tensors(self):
         self.embeddings = torch.tensor(self.embeddings).float()
