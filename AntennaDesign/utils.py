@@ -276,7 +276,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
 class AntennaDataSetsLoader:
     def __init__(self, dataset_path: str, batch_size: int, pca: PCA, split_ratio=None, try_cache=True):
         if split_ratio is None:
-            split_ratio = [0.8, 0.1, 0.1]
+            split_ratio = [0.8, 0.19, 0.01]
         self.batch_size = batch_size
         self.split = split_ratio
         self.trn_folders, self.val_folders, self.tst_folders = [], [], []
