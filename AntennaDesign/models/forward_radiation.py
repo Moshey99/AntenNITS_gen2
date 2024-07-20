@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
 
@@ -34,9 +35,7 @@ class Radiation_Generator(nn.Module):
             nn.Conv2d(32, 32, kernel_size=3),
             nn.ELU(),
             nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
-            nn.ELU(),
-            nn.Conv2d(16, 4, kernel_size=3),
-            nn.ELU())
+        )
         self.output_layer = None
 
     def forward(self, x):
@@ -45,8 +44,9 @@ class Radiation_Generator(nn.Module):
         x = self.input_layer(x)
         x = x.view(x.size(0), 1024, 1, 1)  # Reshape to match the convolutional layers
         x = self.layers(x)
+        x = F.interpolate(x, size=(46, 46), mode='bilinear', align_corners=False)
         if self.output_layer is None:
-            self.output_layer = nn.ConvTranspose2d(4, self.radiation_channels, kernel_size=3, stride=1, padding=1).to(
+            self.output_layer = nn.ConvTranspose2d(16, self.radiation_channels, kernel_size=3, stride=1, padding=1).to(
                 x.device)
         x = self.output_layer(x)
         sep = x.shape[1] // 2
