@@ -11,7 +11,6 @@ from PIL import Image
 import glob
 import matplotlib.pyplot as plt
 import numpy as np
-from resnet_vae import ResNet_VAE
 import argparse
 from sklearn.decomposition import PCA
 import cv2
@@ -28,14 +27,12 @@ parser.add_argument('--gamma', type=float, default=0.9, help='Gamma for StepLR')
 parser.add_argument('--patiance', type=int, default=10, help='Patiance for Early Stopping')
 parser.add_argument('--checkpoint_folder', type=str, default='checkpoints', help='Folder to save checkpoints')
 parser.add_argument('--extra_string', type=str, default='', help='Extra string to add to the model name')
-parser.add_argument('--split_ratio', type=float, default=0.9, help='Ratio to split the dataset')
+parser.add_argument('--split_ratio', type=float, default=0.999, help='Ratio to split the dataset')
 parser.add_argument('--weight_mse', type=float, default=0.5, help='Weight for MSE Loss')
 parser.add_argument('--images_folder', type=str, default='images', help='Folder to save images')
 parser.add_argument('--kl_weight', type=float, default=0.01, help='Weight for KL Loss')
 args = parser.parse_args()
 print(args)
-
-
 
 # Load Config files
 path = os.getcwd()
@@ -80,13 +77,10 @@ def binarize(img, nonmetal_threshold=0.5, feed_threshold=1.5):
 
 # DataLoader Function
 class imagePrep(torch.utils.data.Dataset):
-    def __init__(self, images, rotate=False, flip_horizontal=False, flip_vertical=False):
+    def __init__(self, images):
         super().__init__()
         self.paths = images
         self.len = len(self.paths)
-        self.rotate = rotate
-        self.flip_horizontal = flip_horizontal
-        self.flip_vertical = flip_vertical
 
     def __len__(self):
         return self.len
@@ -94,24 +88,17 @@ class imagePrep(torch.utils.data.Dataset):
     def __getitem__(self, index):
         path = self.paths[index]
         image = np.load(path)
-        if self.rotate:
-            image = image.T
-        if self.flip_horizontal:
-            image = np.flip(image, axis=1)
-        if self.flip_vertical:
-            image = np.flip(image, axis=0)
         image = cv2.resize(image, (image_size[1], image_size[0]))
         image = torch.tensor(image).float().unsqueeze(0)
         return image
 
 
-
-
 # Apply Transformations to Data
 train_set = imagePrep(train_imgs)
 
-pca_data_loader = torch.utils.data.DataLoader(train_set, batch_size=10, shuffle=True)
-fit = False
+pca_data_loader = torch.utils.data.DataLoader(train_set, batch_size=len(train_imgs), shuffle=True)
+fit = True
+print('Preparing data for fitting PCA...')
 for X in pca_data_loader:
     print('Data Shape: ', X.shape, '')
     X = X.view(X.size(0), -1)
@@ -125,13 +112,13 @@ for X in pca_data_loader:
     else:
         pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
     for i in range(6):
-        example_to_show = X[i:i+1].detach().cpu().numpy()
+        example_to_show = X[i:i + 1].detach().cpu().numpy()
         og_image = example_to_show.reshape(image_size[0], image_size[1])
         plt.imshow(og_image, cmap='gray')
         plt.title('Original Image')
         plt.figure()
         reconstructed_example = pca.inverse_transform(pca.transform(example_to_show))
         reconstructed_image = reconstructed_example.reshape(image_size[0], image_size[1])
-        plt.imshow(binarize(reconstructed_image,0.5,1.5), cmap='gray')
+        plt.imshow(binarize(reconstructed_image, 0.5, 1.5), cmap='gray')
         plt.title('Reconstructed Image')
         plt.show()
