@@ -23,6 +23,7 @@ def arg_parser():
     parser.add_argument('--step_size', type=int, default=1, help='step size for gamma decay')
     parser.add_argument('--rad_range', type=list, default=[-55, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
+    parser.add_argument('--lamda', type=int, default=1, help='weight for radiation in gamma radiation loss')
     parser.add_argument('--checkpoint_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward.pth')
     parser.add_argument('--patience', type=int, default=7, help='early stopping patience')
@@ -47,7 +48,7 @@ if __name__ == "__main__":
     save_embeddings(pca, args.data_path)
     antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, pca=pca, try_cache=True)
     model = forward_GammaRad(radiation_channels=12)
-    loss_fn = GammaRad_loss(geo_weight=args.geo_weight)
+    loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_schedule)
@@ -61,6 +62,7 @@ if __name__ == "__main__":
     if scaler_manager.scaler is None:
         print('Fitting environment scaler.')
         envs = EnvironmentScalerLoader(antenna_dataset_loader).load_environments()
+        scaler_manager.scaler = standard_scaler()
         scaler_manager.fit(envs)
         scaler_manager.dump()
     while keep_training:
@@ -85,7 +87,8 @@ if __name__ == "__main__":
             optimizer.step()
             if idx % 100 == 0:
                 print(f'Epoch: {epoch}, Batch: {idx}, Loss: {train_loss / (idx + 1)}')
-        print(f'End Epoch: {epoch}, Loss: {train_loss / len(antenna_dataset_loader.trn_loader)}')
+        train_loss /= len(antenna_dataset_loader.trn_loader)
+        print(f'End Epoch: {epoch}, Loss: {train_loss}')
         epoch += 1
         lr = optimizer.param_groups[0]['lr']
         print(f'Learning rate: {lr}')
