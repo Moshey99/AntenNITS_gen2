@@ -62,24 +62,17 @@ class DataPreprocessor:
         for i in sorted(os.listdir(folder_path)):
             print('working on environment number:', i, 'out of:', self.num_data_points)
             file_path = os.path.join(folder_path, i, 'model_parameters.pickle')
-            try:
-                with open(file_path, 'rb') as f:
-                    env_dict = pickle.load(f)
-                    env_dict.pop('type',
-                                 None)  # remove the first element which is the type of the model (it's constant)
-                    env_dict.pop('plane',
-                                 None)  # remove the second element which is the plane of the model (not always exist)
-                    env_vals = list(env_dict.values())
-                    assert np.all([type(value) != list for value in env_vals]), 'ERROR. List in Environments values'
-                    last_env = copy.deepcopy(env_vals)
-                    all_envs.append(env_vals)
-            except:
-                print('Error in loading the file:', file_path)
-                all_envs.append(last_env)
-        all_envs = np.array(all_envs)
-        if not debug:
-            np.save(os.path.join(Path(folder_path).parent, 'processed_data', 'environments.npy'), all_envs)
-        pass
+            with open(file_path, 'rb') as f:
+                env_dict = pickle.load(f)
+                env_dict.pop('type', None)  # remove the first element which is the type of the mode (constant)
+                plane = env_dict.get('plane', None)
+                assert plane in ['xz', 'yz-flipped'], 'Plane parameter is missing in the environment'
+                env_dict['plane'] = 0 if plane == 'xz' else 1
+                env_vals = list(env_dict.values())
+                assert np.all([type(value) != list for value in env_vals]), 'ERROR. List in Environments values'
+                if not debug:
+                    np.save(os.path.join(Path(folder_path).parent, 'processed', i, 'environment.npy'), np.array(env_vals))
+
 
     def radiation_preprocessor(self, plot=False, debug=False):
         print('Preprocessing radiations')
@@ -452,7 +445,8 @@ class ScalerManager:
             self.scaler = cache_scaler
             print(f'Cached scaler loaded from: {self.path}')
 
-    def fit(self, data: Union[torch.tensor, np.ndarray]):
+    def fit(self, data: np.ndarray):
+        assert self.scaler is not None, 'Scaler is not initialized'
         self.scaler.fit(data)
         print(f'Scaler fitted')
 
@@ -468,6 +462,7 @@ class EnvironmentScalerLoader:
     def load_environments(self):
         envs = []
         for i, X in enumerate(self.antenna_data_loader.trn_loader):
+            print(f'Loading environment {i} out of {len(self.antenna_data_loader.trn_loader)}')
             _, _, _, env = X
             envs.append(env)
         envs = torch.cat(envs, dim=0).detach().cpu().numpy()
@@ -665,26 +660,22 @@ def merge_dxf_files(input_files, output_file):
 def run_dxf2img():
     dxf2img = DXF2IMG()
     all_images = []
-    data_path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs"
-    for folder in sorted(os.listdir(data_path)):
-        print('working on folder:', folder, end='\n')
-        models_path = os.path.join(data_path, folder, 'models')
-        for model_path in sorted(os.listdir(models_path)):
-            merged_output_path = os.path.join(models_path, model_path, 'merged_hatch.dxf')
-            if os.path.exists(merged_output_path):
-                print('already processed:', model_path)
-                continue
-            print('working on model:', model_path)
-            layer_path = os.path.join(models_path, model_path, 'layer_0_PEC.dxf')
-            feed_pec_path = os.path.join(models_path, model_path, 'feed_PEC.dxf')
-            feed_path = os.path.join(models_path, model_path, 'feed.dxf')
-            layer_output_path = fill_lwpolylines_with_hatch(layer_path)
-            feed_pec_output_path = fill_lwpolylines_with_hatch(feed_pec_path)
-            feed_output_path = fill_lwpolylines_with_hatch(feed_path, color=1)
-            merge_dxf_files([layer_output_path, feed_pec_output_path, feed_output_path], merged_output_path)
-            dxf2img.convert_dxf2img([merged_output_path])
-
-            pass
+    data_path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\models"
+    for model_path in sorted(os.listdir(data_path)):
+        merged_output_path = os.path.join(data_path, model_path, 'merged_hatch.dxf')
+        if os.path.exists(merged_output_path):
+            print('already processed:', model_path)
+            continue
+        print('working on model:', model_path)
+        layer_path = os.path.join(data_path, model_path, 'layer_0_PEC.dxf')
+        feed_pec_path = os.path.join(data_path, model_path, 'feed_PEC.dxf')
+        feed_path = os.path.join(data_path, model_path, 'feed.dxf')
+        layer_output_path = fill_lwpolylines_with_hatch(layer_path)
+        feed_pec_output_path = fill_lwpolylines_with_hatch(feed_pec_path)
+        feed_output_path = fill_lwpolylines_with_hatch(feed_path, color=1)
+        merge_dxf_files([layer_output_path, feed_pec_output_path, feed_output_path], merged_output_path)
+        dxf2img.convert_dxf2img([merged_output_path])
+        pass
 
 
 def gen2_gather_datasets(data_folder1, data_folder2, output_folder):
@@ -705,10 +696,13 @@ def gen2_gather_datasets(data_folder1, data_folder2, output_folder):
     print('Data gathered successfully, saved in {}'.format(output_file))
 
 
-def gen2_gather_antennas(data_folder1, data_folder2, output_folder):
+def gen2_gather_antennas(output_folder, data_folder1, data_folder2=None):
     all_paths1 = [os.path.join(data_folder1, file, 'merged_hatch.png') for file in os.listdir(data_folder1)]
-    all_paths2 = [os.path.join(data_folder2, file, 'merged_hatch.png') for file in os.listdir(data_folder2)]
-    all_paths = all_paths1 + all_paths2
+    if data_folder2 is not None:
+        all_paths2 = [os.path.join(data_folder2, file, 'merged_hatch.png') for file in os.listdir(data_folder2)]
+        all_paths = all_paths1 + all_paths2
+    else:
+        all_paths = all_paths1
     for file in all_paths:
         antenna_img = cv2.imread(file)
         b, g, r = cv2.split(antenna_img)
@@ -751,27 +745,26 @@ def organize_dataset_per_antenna():
         print('Antenna number:', idx, 'saved successfully')
     pass
 
-
-def set_plane_for_env(plane, start, stop):
-    assert plane in ['xz'], 'Plane not supported yet'
-    print('Setting plane for environment: ', plane)
-    antennas_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
-    for idx in range(start, stop):
-        env_path = os.path.join(antennas_path, str(idx).zfill(5), 'environment.npy')
-        env = np.load(env_path)
-        env_with_plane = np.concatenate(([0], env))
-        np.save(env_path, env_with_plane)
-        print('Environment number:', idx, 'saved successfully')
+def gen2_organize_from_npz(npz_file, output_folder):
+    data = np.load(npz_file)
+    radiations, gammas, idxs = data['radiation'], data['gamma'], data['index']
+    for i, idx in enumerate(idxs):
+        antenna_path = os.path.join(output_folder, str(idx).zfill(5))
+        assert os.path.exists(antenna_path)
+        np.save(os.path.join(antenna_path, 'gamma.npy'), gammas[i])
+        np.save(os.path.join(antenna_path, 'radiation.npy'), radiations[i])
+        print('gamma and radiation for number:', idx, 'saved successfully')
+        pass
 
 
 if __name__ == '__main__':
-    data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
-    ant_folders = [os.path.join(data_path, str(i).zfill(5)) for i in range(100)]
-    pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-    train_set = AntennaDataSet(ant_folders, pca)
-    data_loader = torch.utils.data.DataLoader(train_set, batch_size=10, shuffle=True)
-    for i, data in enumerate(data_loader):
-        print(data)
+    # data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
+    # ant_folders = [os.path.join(data_path, str(i).zfill(5)) for i in range(100)]
+    # pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
+    # train_set = AntennaDataSet(ant_folders, pca)
+    # data_loader = torch.utils.data.DataLoader(train_set, batch_size=10, shuffle=True)
+    # for i, data in enumerate(data_loader):
+    #     print(data)
     # set_plane_for_env(plane='xz',start=0,stop=15000)
     # organize_dataset_per_antenna()
     # env_preprocessor = DataPreprocessor(folder_path=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\data_2500x2\nits_checkpoints')
@@ -786,14 +779,12 @@ if __name__ == '__main__':
     # data_processor.assert_gamma_rules(gamma)
     # data_processor.assert_radiation_rules(radiation)
     # pass
-    # run_dxf2img()
-    # output_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
-    # gen2_gather_antennas(data_folder1=os.path.join(output_path, 'data_10000x1', 'nits_checkpoints'),
-    #                      data_folder2=os.path.join(output_path, 'data_2500x2', 'nits_checkpoints'),
-    #                      output_folder=os.path.join(output_path, 'gen2_antennas'))
-    #
-    # gen2_gather_datasets(data_folder1=os.path.join(output_path, 'data_10000x1', 'processed_data'),
-    #                      data_folder2=os.path.join(output_path, 'data_2500x2', 'processed_data'),
-    #                      output_folder=output_path)
-    # organize_dataset_per_antenna()
+    run_dxf2img()
+    gen2_organize_from_npz(r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\results_simulator.npz',
+                           output_folder=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\processed')
+    DataPreprocessor(r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\fol'
+                     r'der_to_transfer_many_alphas\models').environment_preprocessor()
+    gen2_gather_antennas(output_folder=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\processed',
+                         data_folder1=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\models')
+
     pass
