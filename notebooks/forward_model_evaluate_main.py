@@ -50,7 +50,7 @@ def arg_parser():
 
 if __name__ == "__main__":
     args = arg_parser()
-    args.checkpoint_path = args.checkpoint_path.replace('forward_12radchannels.pth', 'forward_epoch110.pth')
+    args.checkpoint_path = args.checkpoint_path.replace('forward_12radchannels.pth', 'forward_epoch130.pth')
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
     pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
@@ -59,10 +59,7 @@ if __name__ == "__main__":
     scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
     scaler_manager.try_loading_from_cache()
     if scaler_manager.scaler is None:
-        print('Fitting environment scaler.')
-        envs = EnvironmentScalerLoader(antenna_dataset_loader).load_environments()
-        scaler_manager.fit(envs)
-        scaler_manager.dump()
+        raise ValueError('Scaler not found.')
     for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
         if idx == 1:
             break
@@ -80,13 +77,15 @@ if __name__ == "__main__":
         model.eval()
         for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
             EMBEDDINGS, GAMMA, RADIATION, ENV = sample
-            plot_condition((GAMMA, RADIATION), freqs=np.arange(GAMMA.shape[1]//2))
             embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
                 scaler_manager.scaler.forward(ENV).to(device)
+            if gamma.min() > -3.2:
+                continue
+            print(idx)
+            plot_condition((GAMMA, RADIATION), freqs=np.arange(GAMMA.shape[1]//2))
             geometry = torch.cat((embeddings, env), dim=1)
             target = (gamma, radiation)
             gamma_pred, rad_pred = model(geometry)
-            gamma_pred
             plot_condition((gamma_pred, rad_pred), freqs=np.arange(gamma_pred.shape[1]//2), to_dB=True)
             plt.show()
             output = (gamma_pred, rad_pred, geometry)
