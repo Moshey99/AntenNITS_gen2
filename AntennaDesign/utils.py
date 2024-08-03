@@ -260,9 +260,16 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.gam = downsample_gamma(np.load(os.path.join(antenna_folder, 'gamma.npy'))[np.newaxis], rate=4).squeeze()
         self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy'))[np.newaxis],
                                         rates=[4, 2]).squeeze()
+        self.rad = self.__clip_radiation(self.rad)
         self.env = np.load(os.path.join(antenna_folder, 'environment.npy'))
         if self.try_cache and os.path.exists(os.path.join(antenna_folder, 'embeddings.npy')):
             self.embeddings = np.load(os.path.join(antenna_folder, 'embeddings.npy'))
+
+    @staticmethod
+    def __clip_radiation(radiation: np.ndarray):
+        assert len(radiation.shape) == 3, 'Radiation shape is not 3D (channels, h, w)'
+        radiation[:int(radiation.shape[0] / 2)] = np.clip(radiation[:int(radiation.shape[0] / 2)], -55, 5)
+        return radiation
 
 
 
@@ -283,6 +290,7 @@ class AntennaDataSetsLoader:
 
     def split_data(self, dataset_path, split_ratio):
         all_folders = glob.glob(os.path.join(dataset_path, '[0-9]' * 5))
+        #all_folders = [folder for folder in all_folders if not folder[-5:].startswith('5')]
         random.seed(42)
         random.shuffle(all_folders)
         trn_len = int(len(all_folders) * split_ratio[0])
