@@ -87,20 +87,4 @@ if __name__ == "__main__":
             gamma_pred, rad_pred = model(geometry)
             plot_condition((gamma_pred, rad_pred), freqs=np.arange(gamma_pred.shape[1]//2), to_dB=True)
             plt.show()
-            output = (gamma_pred, rad_pred, geometry)
-    with torch.no_grad():
-        model.eval()
-        val_loss = 0
-        for idx, sample in enumerate(antenna_dataset_loader.val_loader):
-            EMBEDDINGS, GAMMA, RADIATION, ENV = sample
-            embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-                scaler_manager.scaler.forward(ENV).to(device)
-            geometry = torch.cat((embeddings, env), dim=1)
-            target = (gamma, radiation)
-            gamma_pred, rad_pred = model(geometry)
 
-    torch.save(best_model.state_dict(), args.checkpoint_path.replace('.pth', '_best_dict.pth'))
-    torch.save(best_model, args.checkpoint_path.replace('.pth', '_best_instance.pth'))
-    print('Training finished.')
-    print(f'Best loss: {best_loss}')
-    print(f'Best model saved at: {args.checkpoint_path}')
