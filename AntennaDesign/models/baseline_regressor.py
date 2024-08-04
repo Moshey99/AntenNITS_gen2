@@ -84,6 +84,7 @@ class small_deeper_baseline_forward_model(nn.Module):
         self.elu = nn.ELU()
         self.sigmoid = nn.Sigmoid()
         self.dropout = nn.Dropout(p=p_dropout)
+        self.eps = 1e-6
 
     def forward(self, input):  # input is the geometric parameters
         if self.input_layer is None:
@@ -92,7 +93,8 @@ class small_deeper_baseline_forward_model(nn.Module):
         x = self.elu(self.fc2(x))  # Apply ReLU activation
         x = self.elu(self.fc3(x))  # Apply ReLU activation
         x = self.fc4(x)
-        mag = self.sigmoid(x[:, :x.shape[1] // 2])  # magnitude is between 0 and 1
+        mag = self.sigmoid(x[:, :x.shape[1] // 2])
+        mag = torch.clamp(mag, self.eps, 1)
         phase = self.sigmoid(x[:, x.shape[1] // 2:]) * 2 * torch.pi - torch.pi  # phase is between -pi and pi
         output = torch.cat((mag, phase), dim=1)
         return output
