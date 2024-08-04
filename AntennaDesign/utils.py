@@ -515,7 +515,7 @@ def convert_dataset_to_dB(data):
     print('Dataset converted to dB. Saved in data_dB.npz')
 
 
-def produce_stats_gamma(GT_gamma, predicted_gamma, dataset_type='linear', to_print=True):
+def produce_gamma_stats(GT_gamma, predicted_gamma, dataset_type='linear', to_print=True):
     if dataset_type == 'linear':
         GT_gamma[:, :int(GT_gamma.shape[1] / 2)] = 10 * np.log10(GT_gamma[:, :int(GT_gamma.shape[1] / 2)])
     if dataset_type == 'dB':

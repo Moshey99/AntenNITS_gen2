@@ -80,14 +80,14 @@ def main():
     print('predicted geo scaled: ', predicted_geo[sample])
     pred_gamma, pred_radiation = predicted_spectrums
     GT_gamma, GT_radiation = gt_spectrums
-    produce_stats_gamma(gt_spectrums, predicted_spectrums, 'dB')
+    produce_gamma_stats(gt_spectrums, predicted_spectrums, 'dB')
     produce_radiation_stats(gt_spectrums, predicted_spectrums)
     print('--------gt vs predicted spectrum for predicted geo----------')
     if args.compare_forward:
         gt_forw_mat = sio.loadmat(r"C:\Users\moshey\Downloads\results_TEST_valdata_sample444_newforward.mat")
         gt_forw_gamma, gt_forw_radiation = preprocess_mat(gt_forw_mat)
         predicted_spectrum_sample = tuple([pred[sample:sample + 1] for pred in predicted_spectrums])
-        produce_stats_gamma((torch.tensor(gt_forw_gamma).unsqueeze(0).to(device),
+        produce_gamma_stats((torch.tensor(gt_forw_gamma).unsqueeze(0).to(device),
                              torch.tensor(gt_forw_radiation, dtype=torch.float32).unsqueeze(0).to(device))
                             , predicted_spectrum_sample, 'dB')
         produce_radiation_stats((torch.tensor(gt_forw_gamma).unsqueeze(0).to(device),

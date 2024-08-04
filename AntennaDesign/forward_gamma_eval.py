@@ -58,7 +58,7 @@ def main():
 
     pred_gamma = predicted_spectrums
     GT_gamma = gt_spectrums
-    produce_stats_gamma(gt_spectrums, predicted_spectrums,'dB')
+    produce_gamma_stats(gt_spectrums, predicted_spectrums, 'dB')
     prnt = inv_or_forw
     pred_gamma_sample = pred_gamma[sample].cpu().detach().numpy()
     pred_gamma_sample[:int(0.5 * GT_gamma.shape[1])] = 10*np.log10(pred_gamma_sample[:int(0.5 * GT_gamma.shape[1])] )

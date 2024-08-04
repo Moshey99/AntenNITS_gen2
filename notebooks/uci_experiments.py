@@ -143,7 +143,7 @@ def produce_NN_stats(data):
     nn_radiations = downsample_radiation(nn_radiations)
     gt_gammas = torch.tensor(np.repeat(downsample_gamma(data.val.gamma), k_neighbors, axis=0))
     gt_radiations = torch.tensor(np.repeat(downsample_radiation(data.val.radiation), k_neighbors, axis=0))
-    produce_stats_gamma(GT_gamma=gt_gammas, predicted_gamma=torch.tensor(nn_gammas), dataset_type='dB')
+    produce_gamma_stats(GT_gamma=gt_gammas, predicted_gamma=torch.tensor(nn_gammas), dataset_type='dB')
     produce_radiation_stats(predicted_radiation=torch.tensor(nn_radiations), gt_radiation=gt_radiations)
     pass
 
@@ -187,7 +187,7 @@ def generate_overall_stats(model, data, top_n=5):
         likelihoods = model.shadow.pdf(smp,condition).prod(dim=1)
         condition_gamma_sorting = torch.tile(condition_gamma, (n, 1))
         condition_radiation_downsampled_sorting = torch.tile(condition_radiation_downsampled, (n, 1, 1, 1))
-        gamma_metrics = produce_stats_gamma(condition_gamma_sorting, generated_gammas, 'dB',to_print=False)
+        gamma_metrics = produce_gamma_stats(condition_gamma_sorting, generated_gammas, 'dB', to_print=False)
         radiation_metrics =produce_radiation_stats(predicted_radiation=generated_radiations,
                                                    gt_radiation=condition_radiation_downsampled_sorting,to_print=False)
         sort_idx_from_metrics = sort_by_metric(*gamma_metrics,*radiation_metrics)
@@ -224,7 +224,7 @@ def generate_overall_stats(model, data, top_n=5):
             all_generated_radiation_tmp = torch.cat(all_generated_radiation,dim=0)
             all_condition_gamma_tmp = torch.cat(all_condition_gamma,dim=0)
             all_condition_radiation_tmp = torch.cat(all_condition_radiation,dim=0)
-            produce_stats_gamma(all_condition_gamma_tmp, all_generated_gamma_tmp, 'dB')
+            produce_gamma_stats(all_condition_gamma_tmp, all_generated_gamma_tmp, 'dB')
             produce_radiation_stats(predicted_radiation=all_generated_radiation_tmp,
                                         gt_radiation=all_condition_radiation_tmp)
             variations_tmp = torch.cat(variations,dim=0).reshape(-1,smp.shape[1])
@@ -403,7 +403,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     for i in range(1,16):
         generated_gamma = generated_gammas[i-1].unsqueeze(0)
         generated_radiation = generated_radiations[i-1].unsqueeze(0)
-        produce_stats_gamma(condition_gamma, generated_gamma, 'dB')
+        produce_gamma_stats(condition_gamma, generated_gamma, 'dB')
         produce_radiation_stats(predicted_radiation=generated_radiation, gt_radiation=condition_radiation_downsampled)
         figs.append(plot_condition((generated_gamma,generated_radiation),freqs))
         # gamma_plot = plt.subplot(4,4,1)

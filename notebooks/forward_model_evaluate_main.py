@@ -49,6 +49,7 @@ def arg_parser():
 
 
 if __name__ == "__main__":
+    plot_GT_vs_pred = False
     args = arg_parser()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
@@ -81,10 +82,11 @@ if __name__ == "__main__":
             if gamma.min() > -3.15:
                 continue
             print(name)
-            plot_condition((GAMMA, RADIATION), freqs=np.arange(GAMMA.shape[1]//2))
             geometry = torch.cat((embeddings, env), dim=1)
             target = (gamma, radiation)
             gamma_pred, rad_pred = model(geometry)
-            plot_condition((gamma_pred, rad_pred), freqs=np.arange(gamma_pred.shape[1]//2), to_dB=True)
-            plt.show()
+            if plot_GT_vs_pred:
+                plot_condition((GAMMA, RADIATION), freqs=np.arange(GAMMA.shape[1]//2))
+                plot_condition((gamma_pred, rad_pred), freqs=np.arange(gamma_pred.shape[1]//2), to_dB=True)
+                plt.show()
 
