@@ -290,15 +290,15 @@ class AntennaDataSetsLoader:
 
     def split_data(self, dataset_path, split_ratio):
         all_folders = glob.glob(os.path.join(dataset_path, '[0-9]' * 5))
-        #all_folders = [folder for folder in all_folders if not folder[-5:].startswith('5')]
+        # all_folders = [folder for folder in all_folders if folder[-5:].startswith('5')]
         random.seed(42)
         random.shuffle(all_folders)
         trn_len = int(len(all_folders) * split_ratio[0])
         val_len = int(len(all_folders) * split_ratio[1])
         tst_len = len(all_folders) - trn_len - val_len
-        self.trn_folders = sorted(all_folders[:trn_len])
-        self.val_folders = sorted(all_folders[trn_len:trn_len + val_len])
-        self.tst_folders = sorted(all_folders[trn_len + val_len:])
+        self.trn_folders = all_folders[:trn_len]
+        self.val_folders = all_folders[trn_len:trn_len + val_len]
+        self.tst_folders = all_folders[trn_len + val_len:]
 
 
 def create_dataloader(gamma, radiation, params_scaled, batch_size, device, inv_or_forw='inverse'):
