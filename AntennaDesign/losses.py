@@ -145,7 +145,7 @@ class GammaRad_loss(nn.Module):
         if gamma_loss_fn is None:
             self.gamma_loss_fn = gamma_loss_dB()
         if radiation_loss_fn is None:
-            self.radiation_loss_fn = radiation_loss_dB(mag_loss='combined', rad_phase_factor=rad_phase_fac)
+            self.radiation_loss_fn = radiation_loss_dB(mag_loss='huber', rad_phase_factor=rad_phase_fac)
         self.lamda = lamda
         self.geo_weight = geo_weight
 
