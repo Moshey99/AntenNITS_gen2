@@ -75,7 +75,7 @@ if __name__ == "__main__":
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
         for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
-            EMBEDDINGS, GAMMA, RADIATION, ENV = sample
+            EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
             embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
                 scaler_manager.scaler.forward(ENV).to(device)
             geometry = torch.cat((embeddings, env), dim=1)
@@ -98,7 +98,7 @@ if __name__ == "__main__":
             model.eval()
             val_loss = 0
             for idx, sample in enumerate(antenna_dataset_loader.val_loader):
-                EMBEDDINGS, GAMMA, RADIATION, ENV = sample
+                EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
                 embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
                     scaler_manager.scaler.forward(ENV).to(device)
                 geometry = torch.cat((embeddings, env), dim=1)

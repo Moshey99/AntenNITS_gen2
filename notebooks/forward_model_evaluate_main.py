@@ -44,13 +44,12 @@ def arg_parser():
     parser.add_argument('--rad_range', type=list, default=[-55, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_12radchannels.pth')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_epoch440.pth')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = arg_parser()
-    args.checkpoint_path = args.checkpoint_path.replace('forward_12radchannels.pth', 'forward_epoch130.pth')
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
     pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
@@ -63,7 +62,7 @@ if __name__ == "__main__":
     for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
         if idx == 1:
             break
-        EMBEDDINGS, GAMMA, RADIATION, ENV = sample
+        EMBEDDINGS, GAMMA, RADIATION, ENV, _ = sample
         embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
             scaler_manager.scaler.forward(ENV).to(device)
         geometry = torch.cat((embeddings, env), dim=1)
@@ -76,12 +75,12 @@ if __name__ == "__main__":
     with torch.no_grad():
         model.eval()
         for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
-            EMBEDDINGS, GAMMA, RADIATION, ENV = sample
+            EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
             embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
                 scaler_manager.scaler.forward(ENV).to(device)
-            if gamma.min() > -3.2:
+            if gamma.min() > -3.15:
                 continue
-            print(idx)
+            print(name)
             plot_condition((GAMMA, RADIATION), freqs=np.arange(GAMMA.shape[1]//2))
             geometry = torch.cat((embeddings, env), dim=1)
             target = (gamma, radiation)

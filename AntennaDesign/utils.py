@@ -236,6 +236,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         antenna_folder = self.antenna_folders[idx]
+        antenna_name = os.path.basename(antenna_folder)
         self.load_antenna(antenna_folder)
         ant_resized = self.resize_antenna()
         if self.embeddings is None:
@@ -243,7 +244,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.to_tensors()
         embs = self.embeddings.detach().clone()
         self.embeddings = None
-        return embs, self.gam, self.rad, self.env
+        return embs, self.gam, self.rad, self.env, antenna_name
 
     def to_tensors(self):
         self.embeddings = torch.tensor(self.embeddings).float()
