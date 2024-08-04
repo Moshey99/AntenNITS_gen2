@@ -29,24 +29,26 @@ def arg_parser():
     parser.add_argument('--patience', type=int, default=7, help='early stopping patience')
     return parser.parse_args()
 
+
 def save_embeddings(pca, data_path):
-    for i in range(0, 15000):
-        if os.path.exists(os.path.join(data_path, str(i).zfill(5), 'embeddings.npy')):
+    for idx in sorted(os.listdir(data_path)):
+        if os.path.exists(os.path.join(data_path, idx.zfill(5), 'embeddings.npy')) or any(c.isalpha() for c in idx):
             continue
-        antenna = np.load(os.path.join(data_path, str(i).zfill(5), 'antenna.npy'))
+        antenna = np.load(os.path.join(data_path, idx.zfill(5), 'antenna.npy'))
         ant_resized = cv2.resize(antenna, (200, 144))
         embeddings = pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
-        np.save(os.path.join(data_path, str(i).zfill(5), 'embeddings.npy'), embeddings)
-        print(f'Saved embeddings for antenna {i}.')
+        np.save(os.path.join(data_path, idx.zfill(5), 'embeddings.npy'), embeddings)
+        print(f'Saved embeddings for antenna {idx}.')
+
 
 if __name__ == "__main__":
-
     args = arg_parser()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
     pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
     save_embeddings(pca, args.data_path)
     antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, pca=pca, try_cache=True)
+    print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
     model = forward_GammaRad(radiation_channels=12)
     loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda)
     model.to(device)
