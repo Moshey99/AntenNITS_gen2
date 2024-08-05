@@ -3,19 +3,19 @@ import torch.nn as nn
 from nits import resnet
 
 
-class gamma_radiation_condition(nn.Module):
+class GammaRadiationCondition(nn.Module):
     def __init__(self, p_drop=0.25, condition_dim=12):
-        super(gamma_radiation_condition, self).__init__()
+        super(GammaRadiationCondition, self).__init__()
         self.relu = nn.ELU()
         self.dropout = nn.Dropout(p=p_drop)
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.radiation_backbone_input_layer = None
-        self.radiation_backbone = nn.Sequential(resnet.ResNetBasicBlock(16, 16),resnet.ResNetBasicBlock(16, 16),
-                                                nn.Conv2d(16, 32, kernel_size=3,padding=1),
+        self.radiation_backbone = nn.Sequential(resnet.ResNetBasicBlock(16, 16), resnet.ResNetBasicBlock(16, 16),
+                                                nn.Conv2d(16, 32, kernel_size=3, padding=1),
                                                 nn.BatchNorm2d(32), self.relu, self.maxpool,
-                                                nn.Conv2d(32, 64, kernel_size=3,padding=1),
+                                                nn.Conv2d(32, 64, kernel_size=3, padding=1),
                                                 nn.BatchNorm2d(64), self.relu, self.maxpool,
-                                                nn.Conv2d(64, 128, kernel_size=3,padding=1),
+                                                nn.Conv2d(64, 128, kernel_size=3, padding=1),
                                                 nn.BatchNorm2d(128), self.relu, self.maxpool,
                                                 nn.Conv2d(128, 256, kernel_size=3, padding=1),
                                                 nn.BatchNorm2d(256), self.relu, self.maxpool,
@@ -40,8 +40,21 @@ class gamma_radiation_condition(nn.Module):
 
         return x
 
+class EnvironmentCondition(nn.Module):
+    def __init__(self, output_dim=12):
+        super(EnvironmentCondition, self).__init__()
+        self.relu = nn.ELU()
+        self.env_input_layer = None
+        self.output_dim = output_dim
+
+    def forward(self, input):
+        if self.env_input_layer is None:
+            self.env_input_layer = nn.Linear(input.shape[1], self.output_dim)
+        x = self.env_input_layer(input)
+        return x
+
 if __name__ == "__main__":
-    model = gamma_radiation_condition()
+    model = GammaRadiationCondition()
     gamma = torch.randn(1, 502)
     radiation = torch.randn(1, 12, 46, 46)
     output = model((gamma, radiation))
