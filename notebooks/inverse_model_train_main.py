@@ -257,6 +257,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
         devices = [torch.device('cuda:{}'.format(gpu)) for gpu in args.gpu.split(',')]
     else:
         devices = ['cpu']
+    device = devices[0]
 
     use_batch_norm = True
     zero_initialization = False
@@ -266,25 +267,6 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
     antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size, pca=pca, try_cache=True)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
-    ############################################################################################################
-    data = AntennaData()
-    data.Data = data_tmp
-    data.n_dims = data_tmp['parameters_train'].shape[1]
-    scaler = standard_scaler()
-    scaler.fit(data_tmp['parameters_train'])
-    train_params_scaled = scaler.forward(data_tmp['parameters_train'])
-    val_params_scaled = scaler.forward(data_tmp['parameters_val'])
-    test_params_scaled = scaler.forward(data_tmp['parameters_test'])
-    freq_downsample_rate = 4
-    freqs = np.arange(2000, 6000.1, 4)
-    data.trn.x, data.trn.gamma, data.trn.radiation = train_params_scaled.astype(np.float32), downsample_gamma(
-        data_tmp['gamma_train'], freq_downsample_rate), data_tmp['radiation_train']
-    data.val.x, data.val.gamma, data.val.radiation = val_params_scaled.astype(np.float32), downsample_gamma(
-        data_tmp['gamma_val'], freq_downsample_rate), data_tmp['radiation_val']
-    data.tst.x, data.tst.gamma, data.tst.radiation = test_params_scaled.astype(np.float32), downsample_gamma(
-        data_tmp['gamma_test'], freq_downsample_rate), data_tmp['radiation_test']
-    freqs = freqs[::freq_downsample_rate]
-    ############################################################################################################
 
     default_dropout = 0
     args.patience = args.patience if args.patience >= 0 else default_patience
@@ -295,17 +277,17 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
 
     max_val = args.bounds[1]  # max(data.trn.x.max(), data.val.x.max(), data.tst.x.max())
     min_val = args.bounds[0]  # min(data.trn.x.min(), data.val.x.min(), data.tst.x.min())
-    max_val, min_val = torch.tensor(max_val).to(devices[0]).float(), torch.tensor(min_val).to(devices[0]).float()
-
+    max_val, min_val = torch.tensor(max_val).to(device).float(), torch.tensor(min_val).to(device).float()
     max_val *= args.bound_multiplier
     min_val *= args.bound_multiplier
+
     nits_input_dim = [1]
     nits_model = NITS(d=d, arch=nits_input_dim + args.nits_arch, start=min_val, end=max_val, monotonic_const=1e-5,
                       A_constraint='neg_exp',
                       final_layer_constraint='softmax',
                       add_residual_connections=args.add_residual_connections,
                       normalize_inverse=(not args.dont_normalize_inverse),
-                      softmax_temperature=False).to(devices[0])
+                      softmax_temperature=False).to(device)
 
     model = Model(
         d=d,
@@ -334,7 +316,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
         conditional_dim=args.conditional_dim)
 
 
-    model = EMA(model, shadow, decay=args.polyak_decay).to(devices[0])
+    model = EMA(model, shadow, decay=args.polyak_decay).to(device)
     if len(devices) > 1:
         model = nn.DataParallel(model, device_ids=[int(i) for i in args.gpu.split(',')])
 
@@ -343,6 +325,11 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     print_every = 1
     optim = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=1, gamma=args.gamma)
+
+    scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+    scaler_manager.try_loading_from_cache()
+    if scaler_manager.scaler is None:
+        raise ValueError('Scaler not found.')
 
     time_ = time.time()
     epoch = 0
@@ -354,10 +341,12 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     while keep_training:
         print('epoch', epoch, 'time [min]', round((time.time() - start_time) / 60), 'lr', optim.param_groups[0]['lr'])
         model.train()
-        for i, (gamma, rad, x) in enumerate(
-                create_dataloader(data.trn.gamma, data.trn.radiation, data.trn.x, batch_size=args.batch_size,
-                                  device=devices[0])):
-            ll = model(x, (gamma, rad))
+        for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
+            x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
+                scaler_manager.scaler.forward(ENV).to(device)
+            model.init_models_architecture(x, (gamma, rad, env)) if i == 0 else None  # initialize the model
+            # architecture, as its size is determined by the input
+            ll = model(x, (gamma, rad, env))
             optim.zero_grad()
             (-ll).backward()
             train_ll += ll.detach().cpu().numpy()
@@ -367,18 +356,18 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
         print('current ll loss:', ll / len(x))
         if epoch % print_every == 0:
             # compute train loss
-            train_ll /= len(data.trn.x) * print_every
+            train_ll /= len(antenna_dataset_loader.trn_loader) * print_every
             lr = optim.param_groups[0]['lr']
 
             with torch.no_grad():
                 model.eval()
                 val_ll = 0.
                 ema_val_ll = 0.
-                for i, (gamma, rad, x) in enumerate(
-                        create_dataloader(data.val.gamma, data.val.radiation, data.val.x, batch_size=args.batch_size,
-                                          device=devices[0])):
-                    val_ll += model.model(x, (gamma, rad)).detach().cpu().numpy()
-                    ema_val_ll += model(x, (gamma, rad)).detach().cpu().numpy()
+                for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.val_loader):
+                    x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
+                        scaler_manager.scaler.forward(ENV).to(device)
+                    val_ll += model.model(x, (gamma, rad, env)).detach().cpu().numpy()
+                    ema_val_ll += model(x, (gamma, rad, env)).detach().cpu().numpy()
 
                 val_ll /= len(data.val.x)
                 ema_val_ll /= len(data.val.x)
@@ -404,11 +393,11 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
                 model.eval()
                 test_ll = 0.
                 ema_test_ll = 0.
-                for i, (gamma, rad, x) in enumerate(
-                        create_dataloader(data.tst.gamma, data.tst.radiation, data.tst.x, batch_size=args.batch_size,
-                                          device=devices[0])):
-                    test_ll += model.model(x, (gamma, rad)).detach().cpu().numpy()
-                    ema_test_ll += model(x, (gamma, rad)).detach().cpu().numpy()
+                for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.tst_loader):
+                    x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
+                        scaler_manager.scaler.forward(ENV).to(device)
+                    test_ll += model.model(x, (gamma, rad, env)).detach().cpu().numpy()
+                    ema_test_ll += model(x, (gamma, rad, env)).detach().cpu().numpy()
 
                 test_ll /= len(data.tst.x)
                 ema_test_ll /= len(data.tst.x)
