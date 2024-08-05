@@ -85,6 +85,11 @@ class EMA(nn.Module):
             return self.model(*inputs).sum()
         else:
             return self.shadow(*inputs).sum()
+
+    def init_models_architecture(self, *inputs):
+        self.model(*inputs)
+        self.shadow(*inputs)
+
         
 #     def __setattr__(self, attr):
 #         print(attr)
