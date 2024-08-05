@@ -183,8 +183,7 @@ def generate_overall_stats(model, data, top_n=5):
         condition = (condition_gamma,condition_radiation)
         smp = model.shadow.sample(n, devices[0], condition=condition)
         generated_gammas,generated_radiations = forward_model(smp)
-        generated_gammas[:,:generated_gammas.shape[1]//2] = 10*torch.log10(generated_gammas[:,:generated_gammas.shape[1]//2])
-        likelihoods = model.shadow.pdf(smp,condition).prod(dim=1)
+        generated_gammas = gamma_to_dB(generated_gammas)
         condition_gamma_sorting = torch.tile(condition_gamma, (n, 1))
         condition_radiation_downsampled_sorting = torch.tile(condition_radiation_downsampled, (n, 1, 1, 1))
         gamma_metrics = produce_gamma_stats(condition_gamma_sorting, generated_gammas, 'dB', to_print=False)
@@ -195,7 +194,7 @@ def generate_overall_stats(model, data, top_n=5):
         smp = smp[:top_n]
         variations.append(torch.std(scaler.inverse(smp), dim=0))
         generated_gammas, generated_radiations = forward_model(smp)
-        generated_gammas[:,:generated_gammas.shape[1]//2] = 10*torch.log10(generated_gammas[:,:generated_gammas.shape[1]//2])
+        generated_gammas = gamma_to_dB(generated_gammas)
         freq_downsample_rate = 4
         freqs = np.arange(2000, 6000.1, 4)
         freqs = freqs[::freq_downsample_rate]

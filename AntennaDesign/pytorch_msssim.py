@@ -141,7 +141,7 @@ class MSSSIM(torch.nn.Module):
         # TODO: store window between calls if possible
         img1 = (img1-self.rad_range[0])/(self.rad_range[1]-self.rad_range[0])
         img2 = (img2-self.rad_range[0])/(self.rad_range[1]-self.rad_range[0])
-        return -msssim(img1, img2, window_size=self.window_size, size_average=self.size_average)
+        return msssim(img1, img2, window_size=self.window_size, size_average=self.size_average)
 
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

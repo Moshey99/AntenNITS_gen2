@@ -13,6 +13,7 @@ import pandas as pd
 import torch
 import matplotlib.pyplot as plt
 import torch.nn as nn
+from pytorch_msssim import MSSSIM
 from sklearn.neighbors import NearestNeighbors
 from sklearn.decomposition import PCA
 import time
@@ -515,6 +516,11 @@ def convert_dataset_to_dB(data):
     print('Dataset converted to dB. Saved in data_dB.npz')
 
 
+def gamma_to_dB(gamma: torch.Tensor):
+    gamma[:, :int(gamma.shape[1] / 2)] = 10 * torch.log10(gamma[:, :int(gamma.shape[1] / 2)])
+    return gamma
+
+
 def produce_gamma_stats(GT_gamma, predicted_gamma, dataset_type='linear', to_print=True):
     if dataset_type == 'linear':
         GT_gamma[:, :int(GT_gamma.shape[1] / 2)] = 10 * np.log10(GT_gamma[:, :int(GT_gamma.shape[1] / 2)])
@@ -529,7 +535,7 @@ def produce_gamma_stats(GT_gamma, predicted_gamma, dataset_type='linear', to_pri
         GT_gamma.shape[1] / 2):]
     # predicted_gamma_mag = 10*np.log10(predicted_gamma_mag)
     diff_dB = torch.abs(predicted_gamma_mag - GT_gamma_mag)
-    respective_diff = torch.where(torch.abs(GT_gamma_mag) > 1.5, torch.div(diff_dB, torch.abs(GT_gamma_mag)) * 100, 0)
+    respective_diff = torch.where(GT_gamma_mag < -1.5, torch.div(diff_dB, torch.abs(GT_gamma_mag)) * 100, 0)
     avg_respective_diff = torch.mean(respective_diff[torch.nonzero(respective_diff, as_tuple=True)]).item()
     avg_diff = torch.mean(diff_dB, dim=1)
     max_diff = torch.max(diff_dB, dim=1)[0]
@@ -552,6 +558,7 @@ def produce_gamma_stats(GT_gamma, predicted_gamma, dataset_type='linear', to_pri
 
 
 def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
+    msssim = MSSSIM()
     if type(predicted_radiation) == tuple:
         _, predicted_radiation = predicted_radiation
         _, gt_radiation = gt_radiation
@@ -574,9 +581,11 @@ def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
     mean_max_error_phase = torch.mean(max_diff_phase).item()
     msssim_vals = []
     for i in range(gt_radiation.shape[0]):
-        msssim_vals.append(pytorch_msssim.msssim(pred_rad_mag[i:i + 1].float(), gt_rad_mag[i:i + 1].float()).item())
+        msssim_vals.append(msssim(pred_rad_mag[i:i + 1].float(), gt_rad_mag[i:i + 1].float()).item())
     msssim_vals = torch.tensor(msssim_vals)
     avg_msssim_mag = msssim_vals.mean().item()
+    if np.isnan(avg_msssim_mag):
+        pass
     # print all the stats for prnt variant as one print statement
     if to_print:
         print('Radiation - mean_abs_error_mag:', round(torch.mean(mean_abs_error_mag).item(), 4),
@@ -585,7 +594,7 @@ def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
               , ' dB, mean_abs_error_phase:', round(torch.mean(mean_abs_error_phase).item(), 4),
               ' rad, mean_max_error_phase:'
               , round(mean_max_error_phase, 4), ' rad, msssim_mag:', round(avg_msssim_mag, 4))
-    return mean_abs_error_mag, max_diff_mag, msssim_vals
+    return mean_abs_error_mag, max_diff_mag, mean_abs_error_phase, msssim_vals
 
 
 def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
