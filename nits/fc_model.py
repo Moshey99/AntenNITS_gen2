@@ -362,7 +362,7 @@ class Model(nn.Module):
         return new_params.reshape(-1, self.nits_model.tot_params)
 
     def forward(self, x, condition = None):
-        ll = self.pdf(x,condition).log().sum()
+        ll = self.pdf(x, condition).log().sum()
 
         return ll
 
@@ -385,7 +385,7 @@ class Model(nn.Module):
 
         return data
 
-    def pdf(self, x,condition=None):
+    def pdf(self, x, condition=None):
         if hasattr(self, 'normalizer'):
             x = self.normalizer(x)
 
@@ -393,7 +393,7 @@ class Model(nn.Module):
         x = self.proj(x)
 
         # obtain parameters
-        params = self.mlp(x,condition)
+        params = self.mlp(x, condition)
 
         if hasattr(self, 'normalizer'):
             params = self.add_normalizer_weights(params)
