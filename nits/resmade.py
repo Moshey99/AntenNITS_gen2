@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F, init
 from torch.nn.utils import weight_norm as wn
-from nits.antenna_condition import gamma_radiation_condition
+from nits.antenna_condition import GammaRadiationCondition, EnvironmentCondition
 
 # parts adapted from https://github.com/conormdurkan/autoregressive-energy-machines
 
@@ -316,8 +316,10 @@ class ResidualMADE(nn.Module):
         )
         if conditional:
             assert conditioning_dim is not None, 'Dimension of condition variables must be specified.'
-        self.condition_backbone = gamma_radiation_condition(condition_dim=conditioning_dim)
-        self.conditional_layers = nn.Sequential(self.condition_backbone, nn.ELU(), nn.Linear(conditioning_dim, hidden_dim))
+        self.spectrum_condition_backbone = GammaRadiationCondition(condition_dim=conditioning_dim)
+        self.spectrum_condition_layers = nn.Sequential(self.spectrum_condition_backbone, nn.ELU(),
+                                                       nn.Linear(conditioning_dim, hidden_dim))
+        self.environment_condition_layers = EnvironmentCondition(output_dim=hidden_dim)
         self.blocks = nn.ModuleList(
             [MaskedResidualBlock(
                 features=hidden_dim,
@@ -338,16 +340,26 @@ class ResidualMADE(nn.Module):
             weight_norm=weight_norm
         )
 
-
     def forward(self, x, conditional_inputs=None):
         x = self.initial_layer(x)
-        if self.conditional:
-            x += self.conditional_layers(conditional_inputs)
+        spectrum_condition, environment_condition = self.get_conditions(x, conditional_inputs)
+        x += spectrum_condition
         for block in self.blocks:
             x = block(x)
+        x += environment_condition
         x = self.activation(x)
         x = self.final_layer(x)
         return x
+
+    def get_conditions(self, x, conditional_inputs):
+        if self.conditional and conditional_inputs is not None:
+            cond_gamma, cond_rad, cond_env = conditional_inputs
+            spectrum_condition = self.spectrum_condition_layers((cond_gamma, cond_rad))
+            environment_condition = self.environment_condition_layers(cond_env)
+        else:
+            spectrum_condition = torch.zeros_like(x, device=x.device)
+            environment_condition = torch.zeros_like(x, device=x.device)
+        return spectrum_condition, environment_condition
 
 
 def check_connectivity():
