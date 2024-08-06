@@ -12,10 +12,6 @@ def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
-    parser.add_argument('--forward_model_path_gamma', type=str,
-                        default=r'checkpoints/forward_gamma_smoothness_0.001_0.0001.pth')
-    parser.add_argument('--forward_model_path_radiation', type=str,
-                        default=r'checkpoints/forward_radiation_huberloss.pth')
     parser.add_argument('--batch_size', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-3, help='initial learning rate')
     parser.add_argument('--epochs', type=int, default=120)
