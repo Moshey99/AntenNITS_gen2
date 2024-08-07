@@ -1,4 +1,5 @@
 import argparse
+import copy
 import itertools
 import sys
 import time
@@ -205,6 +206,7 @@ def generate_overall_stats(model, data, top_n=5):
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
+parser.add_argument('-o', '--output_folder', type=str,default=None)
 parser.add_argument('-g', '--gpu', type=str, default='')
 parser.add_argument('-b', '--batch_size', type=int, default=20)
 parser.add_argument('-hi', '--hidden_dim', type=int, default=128)
@@ -230,6 +232,8 @@ parser.add_argument('--bounds', type=list_str_to_list, default='[-10,10]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
 args = parser.parse_args()
+output_folder = os.path.join(args.data_path,'checkpoints_inverse') if args.output_folder is None else args.output_folder
+Path(output_folder).mkdir(parents=True, exist_ok=True)
 conditional = args.conditional
 lr_grid = [2e-4]
 hidden_dim_grid = [256]
@@ -376,7 +380,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
             if ema_val_ll > max_val_ll + 1e-4:
                 patience = args.patience
                 max_val_ll = ema_val_ll
-                best_model = model
+                best_model = copy.deepcopy(model)
             else:
                 patience -= 1
             print('Patience = ', patience)
@@ -420,6 +424,10 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
             train_ll = 0.
 
         if epoch % (print_every * 10) == 0:
+            # save best model so far
+            torch.save(best_model.state_dict(), os.path.join(output_folder, f'ANT_model_{model_extra_string}.pth'))
+            with open(os.path.join(output_folder, 'epoch.txt'), 'w') as f:
+                f.write(str(epoch))
             print(args)
 dict_to_print = {model_extra_string: (np.round(max_val, 3), np.round(last_train, 3)) for
                  model_extra_string, max_val, last_train in zip(model_names, max_vals_ll, lasts_train_ll)}
