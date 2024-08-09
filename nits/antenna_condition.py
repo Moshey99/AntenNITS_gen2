@@ -40,6 +40,7 @@ class GammaRadiationCondition(nn.Module):
 
         return x
 
+
 class EnvironmentCondition(nn.Module):
     def __init__(self, output_dim=12):
         super(EnvironmentCondition, self).__init__()
@@ -52,6 +53,7 @@ class EnvironmentCondition(nn.Module):
             self.env_input_layer = nn.Linear(input.shape[1], self.output_dim).to(input.device)
         x = self.env_input_layer(input)
         return x
+
 
 if __name__ == "__main__":
     model = GammaRadiationCondition()
