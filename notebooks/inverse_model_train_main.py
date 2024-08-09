@@ -67,7 +67,6 @@ def plot_condition(condition, freqs):
     return fig
 
 
-
 def list_str_to_list(s):
     print(s)
     assert s[0] == '[' and s[-1] == ']'
@@ -78,18 +77,6 @@ def list_str_to_list(s):
     s = [int(x) for x in s]
 
     return s
-
-
-def create_batcher(x, batch_size=1):
-    idx = 0
-    p = torch.randperm(len(x))
-    x = x[p]
-
-    while idx + batch_size < len(x):
-        yield torch.tensor(x[idx:idx + batch_size], device=device)
-        idx += batch_size
-    else:
-        yield torch.tensor(x[idx:], device=device)
 
 
 def produce_NN_stats(data):
@@ -147,7 +134,7 @@ def generate_overall_stats(model, data, top_n=5):
         # np.random.seed(96); idx = np.random.choice(len(data.trn.x), 1)
         idx = [idx]
         condition_gamma, condition_radiation = (
-        torch.Tensor(data.val.gamma[idx]), torch.Tensor(data.val.radiation[idx]))
+            torch.Tensor(data.val.gamma[idx]), torch.Tensor(data.val.radiation[idx]))
         condition_radiation_downsampled = downsample_radiation(condition_radiation)
         condition = (condition_gamma, condition_radiation)
         smp = model.shadow.sample(n, devices[0], condition=condition)
@@ -170,7 +157,7 @@ def generate_overall_stats(model, data, top_n=5):
         freqs = freqs[::freq_downsample_rate]
         figs = []
         condition_gamma, condition_radiation_downsampled = (
-        condition_gamma[0].unsqueeze(0), condition_radiation_downsampled[0].unsqueeze(0))
+            condition_gamma[0].unsqueeze(0), condition_radiation_downsampled[0].unsqueeze(0))
         # figs.append(plot_condition((condition_gamma,condition_radiation_downsampled),freqs))
         # for i in range(1, top_n+1):
         #     generated_gamma = generated_gammas[i - 1].unsqueeze(0)
@@ -206,7 +193,7 @@ def generate_overall_stats(model, data, top_n=5):
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
-parser.add_argument('-o', '--output_folder', type=str,default=None)
+parser.add_argument('-o', '--output_folder', type=str, default=None)
 parser.add_argument('-g', '--gpu', type=str, default='')
 parser.add_argument('-b', '--batch_size', type=int, default=20)
 parser.add_argument('-hi', '--hidden_dim', type=int, default=128)
@@ -221,10 +208,6 @@ parser.add_argument('-l', '--learning_rate', type=float, default=2e-4)
 parser.add_argument('-p', '--dropout', type=float, default=-1.0)
 parser.add_argument('-rc', '--add_residual_connections', type=bool, default=True)
 parser.add_argument('-bm', '--bound_multiplier', type=int, default=1)
-parser.add_argument('-dq', '--dequantize', type=bool, default=False,
-                    help='do we dequantize the pixels? performs uniform dequantization')
-parser.add_argument('-ds', '--discretized', type=bool, default=False,
-                    help='Discretized model')
 parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
                     help='Weights for each step of multistep NITS')
 parser.add_argument('--scarf', action="store_true")
@@ -232,7 +215,8 @@ parser.add_argument('--bounds', type=list_str_to_list, default='[-10,10]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
 args = parser.parse_args()
-output_folder = os.path.join(args.data_path,'checkpoints_inverse') if args.output_folder is None else args.output_folder
+output_folder = os.path.join(args.data_path,
+                             'checkpoints_inverse') if args.output_folder is None else args.output_folder
 Path(output_folder).mkdir(parents=True, exist_ok=True)
 conditional = args.conditional
 lr_grid = [2e-4]
@@ -318,7 +302,6 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
         nits_input_dim=nits_input_dim,
         conditional=conditional,
         conditional_dim=args.conditional_dim)
-
 
     model = EMA(model, shadow, decay=args.polyak_decay).to(device)
     if len(devices) > 1:
