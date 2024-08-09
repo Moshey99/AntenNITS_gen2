@@ -6,11 +6,11 @@ from torch.nn import functional as F, init
 from torch.nn.utils import weight_norm as wn
 from nits.antenna_condition import GammaRadiationCondition, EnvironmentCondition
 
-# parts adapted from https://github.com/conormdurkan/autoregressive-energy-machines
 
 def tile(x, n):
     assert isinstance(n, int) and n > 0, 'Argument \'n\' must be an integer.'
     return x.unsqueeze(-1).tile((1, n)).reshape(-1)
+
 
 def get_mask(in_features, out_features, autoregressive_features, mask_type=None):
     max_ = max(1, autoregressive_features - 1)
@@ -36,6 +36,7 @@ def get_mask(in_features, out_features, autoregressive_features, mask_type=None)
 
     return mask
 
+
 # class MaskedLinear(nn.Linear):
 #     def __init__(self, in_features, out_features, autoregressive_features, kind=None, bias=True, weight_norm=False):
 #         super(MaskedLinear, self).__init__(in_features=in_features, out_features=out_features, bias=bias)
@@ -57,13 +58,14 @@ class PreMaskedLinear(nn.Linear):
     def forward(self, x):
         return F.linear(x, self.weight * self.mask, self.bias)
 
+
 class MaskedLinear(nn.Module):
-    def __init__(self, in_features, out_features, autoregressive_features, 
+    def __init__(self, in_features, out_features, autoregressive_features,
                  kind=None, bias=True, weight_norm=False):
         super().__init__()
         self.weight_norm = weight_norm
-        linear = PreMaskedLinear(in_features, out_features, 
-                                      autoregressive_features, kind=kind, bias=bias)
+        linear = PreMaskedLinear(in_features, out_features,
+                                 autoregressive_features, kind=kind, bias=bias)
         if weight_norm:
             self.linear = wn(linear)
             self.register_buffer("first_forward", torch.tensor(True).bool())
@@ -84,9 +86,10 @@ class MaskedLinear(nn.Module):
 
         return self.linear(x, **kwargs)
 
+
 class MaskedResidualBlock(nn.Module):
     def __init__(self, features, autoregressive_features, activation=F.relu,
-                 zero_initialization=True, dropout_probability=0., 
+                 zero_initialization=True, dropout_probability=0.,
                  use_batch_norm=False, weight_norm=False):
         super().__init__()
         self.features = features
@@ -107,8 +110,9 @@ class MaskedResidualBlock(nn.Module):
             eps = 1e-5
             init.uniform_(self.layers[-1].weight, a=-eps, b=eps)
             init.uniform_(self.layers[-1].bias, a=-eps, b=eps)
-#             init.zeros_(self.layers[-1].weight)
-#             init.zeros_(self.layers[-1].bias)
+
+    #             init.zeros_(self.layers[-1].weight)
+    #             init.zeros_(self.layers[-1].bias)
 
     def forward(self, inputs):
         temps = inputs
@@ -122,7 +126,8 @@ class MaskedResidualBlock(nn.Module):
         temps = self.dropout(temps)
         temps = self.layers[1](temps)
         return temps + inputs
-    
+
+
 class AttnLinear(nn.Module):
     def __init__(self, dim_in, dim_out):
         super().__init__()
@@ -138,13 +143,15 @@ class AttnLinear(nn.Module):
         assert len(x.shape) == 3
         assert x.shape[1] == self.dim_in, 'xs[1]: {}, self.dim_in: {}'.format(x.shape[1], self.dim_in)
         x = x.unsqueeze(2)
-        x = torch.einsum('ij,njkm->nikm', self.weight, x)[...,0,:] + self.bias[:,None]
+        x = torch.einsum('ij,njkm->nikm', self.weight, x)[..., 0, :] + self.bias[:, None]
 
         return x
-    
+
+
 def concat_elu(x, axis=1):
     return F.silu(torch.cat([x, -x], dim=axis))
-    
+
+
 class ResAttnLinear(nn.Module):
     def __init__(self, features, dropout, skip=False):
         super().__init__()
@@ -152,11 +159,11 @@ class ResAttnLinear(nn.Module):
         self.linear_out = AttnLinear(features * 2, features * 2)
         self.nonlinearity = concat_elu
         self.dropout = None if dropout is None else nn.Dropout(dropout)
-        
+
         self.skip = skip
         if skip:
             self.linear_skip = AttnLinear(int(2 * (features // 2)), features)
-        
+
     def forward(self, orig_x, a=None):
         x = self.linear_in(self.nonlinearity(orig_x))
         if a is not None:
@@ -164,11 +171,12 @@ class ResAttnLinear(nn.Module):
         x = self.nonlinearity(x)
         x = self.dropout(x) if self.dropout is not None else x
         x = self.linear_out(x)
-        
+
         chunks = torch.chunk(x, 2, dim=1)
         x = chunks[0] * chunks[1].sigmoid()
         return orig_x + x
-    
+
+
 class AttentionBlock(nn.Module):
     def __init__(self, x_dim, features, dropout, K=16):
         super().__init__()
@@ -200,7 +208,7 @@ class AttentionBlock(nn.Module):
     def forward(self, x, inputs, b):
         assert x.shape[1] == self.features and x.shape[2] == self.x_dim
         n, d = len(x), self.x_dim
-        
+
         x_b = torch.cat([x, b], axis=1)
         inputs_x_b = torch.cat([inputs, x_b], axis=1)
 
@@ -224,12 +232,14 @@ class AttentionBlock(nn.Module):
         result = self.grn_out(x, a=att_values)
 
         return result
-    
+
+
 def causal_shift(x):
     n, d = x.shape
     zeros = torch.zeros((n, 1), device=x.device)
-    x = torch.cat([zeros, x[:,:-1]], axis=1)
+    x = torch.cat([zeros, x[:, :-1]], axis=1)
     return x
+
 
 class CausalTransformer(nn.Module):
     def __init__(self, input_dim, n_blocks, hidden_dim, output_dim_multiplier,
@@ -260,41 +270,41 @@ class CausalTransformer(nn.Module):
             input_dim,
             kind='output'
         )
-        
+
         self.activation = activation
         self.background = nn.Parameter(self.get_background(), requires_grad=False)
-        
+
     def get_background(self):
         d = self.input_dim - 1
         background = ((torch.arange(d).float() - d / 2) / d)
         background = background[None, None, :]
 
         return background
-        
+
     def forward(self, inputs, conditional_inputs=None):
         # configure background
         b = self.background.tile(len(inputs), 1, 1)
-        
+
         x = inputs
         x = self.initial_layer(x)
-        
+
         # apply causal shift
         inputs = inputs[:, 1:]
-        
+
         # reshape
         x = x.reshape(-1, self.hidden_dim, self.input_dim - 1)
         inputs = inputs.reshape(-1, 1, self.input_dim - 1)
-        
+
         for block in self.blocks:
             x = block(x, inputs, b)
-            
+
         # reshape back
         x = x.reshape(-1, (self.input_dim - 1) * self.hidden_dim)
-        
+
         x = self.activation(x)
         x = self.final_layer(x)
         return x
-    
+
 
 class ResidualMADE(nn.Module):
     def __init__(self, input_dim, n_residual_blocks, hidden_dim,
@@ -344,9 +354,9 @@ class ResidualMADE(nn.Module):
         x = self.initial_layer(x)
         spectrum_condition, environment_condition = self.get_conditions(x, conditional_inputs)
         x += spectrum_condition
+        x += environment_condition
         for block in self.blocks:
             x = block(x)
-        x += environment_condition
         x = self.activation(x)
         x = self.final_layer(x)
         return x
@@ -368,7 +378,7 @@ def check_connectivity():
     n_blocks = 2
     hidden_dim = 16
     conditional = False
-#     for Encoder in [ResidualMADE, CausalTransformer]:
+    #     for Encoder in [ResidualMADE, CausalTransformer]:
     for Encoder in [CausalTransformer]:
         print('Testing {}...'.format(Encoder))
         model = Encoder(
@@ -377,7 +387,7 @@ def check_connectivity():
             hidden_dim=hidden_dim,
             output_dim_multiplier=output_dim_multiplier,
         )
-#         inputs = (torch.rand(1, input_dim) > 0.5).float()
+        #         inputs = (torch.rand(1, input_dim) > 0.5).float()
         inputs = torch.rand(1, input_dim)
         inputs.requires_grad = True
         res = []
@@ -399,7 +409,7 @@ def check_masks():
     hidden_dim = 6
     output_dim_multiplier = 2
     n_blocks = 2
-    
+
     made = ResidualMADE(
         input_dim=input_dim,
         n_residual_blocks=n_blocks,
