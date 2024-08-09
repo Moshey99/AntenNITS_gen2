@@ -291,7 +291,7 @@ class AntennaDataSetsLoader:
         self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
 
     def split_data(self, dataset_path, split_ratio):
-        all_folders = glob.glob(os.path.join(dataset_path, '[0-9]' * 5))
+        all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]' * 5)))
         # all_folders = [folder for folder in all_folders if folder[-5:].startswith('5')]
         random.seed(42)
         random.shuffle(all_folders)
