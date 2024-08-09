@@ -361,7 +361,7 @@ class Model(nn.Module):
         new_params = torch.cat([A, b, reshaped_params[:, :, 2:]], axis=2)
         return new_params.reshape(-1, self.nits_model.tot_params)
 
-    def forward(self, x, condition = None):
+    def forward(self, x, condition=None):
         ll = self.pdf(x, condition).log().sum()
 
         return ll
@@ -375,7 +375,7 @@ class Model(nn.Module):
                 x_proj = self.proj(data)
 
                 # obtain parameters
-                params = self.mlp(data,condition)
+                params = self.mlp(data, condition)
 
                 sample = self.nits_model.sample(1, params)
                 data[:, i] = sample[:, i]
