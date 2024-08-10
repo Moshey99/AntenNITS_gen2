@@ -62,14 +62,14 @@ def arg_parser():
                         default=r'checkpoints/forward_radiation_huberloss.pth')
     parser.add_argument('--rad_range', type=list, default=[-55, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
-    parser.add_argument('--checkpoint_path', type=str, default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\
-    AntennaDesign_data\data_15000_3envs\checkpoints\forward_allalphas.pth')
+    parser.add_argument('--checkpoint_path', type=str,
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_allalphas.pth')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     all_gamma_stats, all_radiation_stats = [], []
-    plot_GT_vs_pred = False
+    plot_GT_vs_pred = True
     args = arg_parser()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         model.eval()
-        for idx, sample in enumerate(antenna_dataset_loader.val_loader):
+        for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
             EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
             embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
                 scaler_manager.scaler.forward(ENV).to(device)
