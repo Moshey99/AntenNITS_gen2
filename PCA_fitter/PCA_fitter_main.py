@@ -19,6 +19,9 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 # Argument Parser
 parser = argparse.ArgumentParser(description='Convolutional AutoEncoder for Geometry Data')
+parser.add_argument('--data_path', type=str,
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
+parser.add_argument('--image_size', type=tuple, nargs='+', default=(144, 200), help='Size of the Image')
 parser.add_argument('--device', type=int, nargs='+', default=[2], help='Device to run the model on')
 parser.add_argument('--lrs', type=float, nargs='+', default=[0.0005], help='Learning Rates to try')
 parser.add_argument('--bs', type=int, nargs='+', default=[32], help='Batch Sizes to try')
@@ -34,27 +37,8 @@ parser.add_argument('--kl_weight', type=float, default=0.01, help='Weight for KL
 args = parser.parse_args()
 print(args)
 
-# Load Config files
-path = os.getcwd()
-config_path = os.path.join(path, 'config.json')
-with open(config_path, 'r') as f:
-    config = json.load(f)
-
-print("The Configuration Variables are:")
-print('Configuration: ', config)
-
-# Define Config variables
-image_size = config['image_size']
-data_path = config['DataPath']
-batch_size = config['batch_size']
-learning_rate = config['lr']
-weight_decay = config['weight_decay']
-epochs = config['n_epochs']
-load_model = config['load_model']
-embed_size = config['embedding_size']
-embed_sizes = args.embed_sizes
-lrs = args.lrs
-bs_sizes = args.bs
+image_size = args.image_size
+data_path = args.data_path
 print("\n____________________________________________________\n")
 print("\nLoading Dataset into DataLoader...")
 
@@ -76,7 +60,7 @@ def binarize(img, nonmetal_threshold=0.5, feed_threshold=1.5):
 
 
 # DataLoader Function
-class imagePrep(torch.utils.data.Dataset):
+class Imageprep(torch.utils.data.Dataset):
     def __init__(self, images):
         super().__init__()
         self.paths = images
@@ -94,10 +78,10 @@ class imagePrep(torch.utils.data.Dataset):
 
 
 # Apply Transformations to Data
-train_set = imagePrep(train_imgs)
+train_set = Imageprep(train_imgs)
 
-pca_data_loader = torch.utils.data.DataLoader(train_set, batch_size=len(train_imgs), shuffle=True)
-fit = True
+pca_data_loader = torch.utils.data.DataLoader(train_set, batch_size=20, shuffle=True)
+fit = False
 print('Preparing data for fitting PCA...')
 for X in pca_data_loader:
     print('Data Shape: ', X.shape, '')
@@ -109,6 +93,7 @@ for X in pca_data_loader:
         print('PCA Fitted!')
         explained_variance = pca.explained_variance_ratio_
         pickle.dump(pca, open(os.path.join(data_path, 'pca_model.pkl'), 'wb'))
+        print('PCA Model Saved in ', os.path.join(data_path, 'pca_model.pkl'))
     else:
         pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
     for i in range(6):
