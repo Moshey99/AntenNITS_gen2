@@ -42,6 +42,11 @@ def extend_to_fit_samples(num_samples: int, env: torch.Tensor, gamma: torch.Tens
     return gamma, rad, env
 
 
+def image_from_embeddings(pca_, embeddings: np.ndarray, shape=(144, 200)):
+    ant_resized = pca_.inverse_transform(embeddings).reshape(shape)
+    return ant_resized
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
@@ -87,6 +92,7 @@ with torch.no_grad():
         rad_pred_sorted = rad_pred[sorting_idxs]
         plot_GT_vs_pred = True
         if plot_GT_vs_pred:
+            antenna_im = image_from_embeddings(pca, x.cpu().numpy().flatten(), shape=(144, 200))
             plot_condition((gamma, rad), freqs=np.arange(gamma.shape[1] // 2))
             gamma_pred_dB_best = gamma_pred_dB_sorted[0].unsqueeze(0)
             rad_pred_best = rad_pred_sorted[0].unsqueeze(0)
