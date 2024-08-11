@@ -343,7 +343,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
         print('current ll loss:', ll / len(x))
         if epoch % print_every == 0:
             # compute train loss
-            train_ll /= len(antenna_dataset_loader.trn_loader) * print_every
+            train_ll /= len(antenna_dataset_loader.trn_dataset) * print_every
             lr = optim.param_groups[0]['lr']
 
             with torch.no_grad():
@@ -356,8 +356,8 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
                     val_ll += model.model(x, (gamma, rad, env)).detach().cpu().numpy()
                     ema_val_ll += model(x, (gamma, rad, env)).detach().cpu().numpy()
 
-                val_ll /= len(antenna_dataset_loader.val_loader)
-                ema_val_ll /= len(antenna_dataset_loader.val_loader)
+                val_ll /= len(antenna_dataset_loader.val_dataset)
+                ema_val_ll /= len(antenna_dataset_loader.val_dataset)
 
             # early stopping
             if ema_val_ll > max_val_ll + 1e-4:
@@ -386,8 +386,8 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
                     test_ll += model.model(x, (gamma, rad, env)).detach().cpu().numpy()
                     ema_test_ll += model(x, (gamma, rad, env)).detach().cpu().numpy()
 
-                test_ll /= len(antenna_dataset_loader.tst_loader)
-                ema_test_ll /= len(antenna_dataset_loader.tst_loader)
+                test_ll /= len(antenna_dataset_loader.tst_dataset)
+                ema_test_ll /= len(antenna_dataset_loader.tst_dataset)
 
             fmt_str1 = 'epoch: {:3d}, time: {:3d}s, train_ll: {:.4f},'
             fmt_str2 = ' ema_val_ll: {:.4f}, ema_test_ll: {:.4f},'
