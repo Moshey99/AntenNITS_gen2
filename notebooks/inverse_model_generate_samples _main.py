@@ -37,7 +37,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
-parser.add_argument('-b', '--batch_size', type=int, default=15)
+parser.add_argument('-b', '--batch_size', type=int, default=30)
 parser.add_argument('-g', '--gpu', type=str, default='')
 parser.add_argument('-hi', '--hidden_dim', type=int, default=256)
 parser.add_argument('-nr', '--n_residual_blocks', type=int, default=8)
@@ -150,11 +150,10 @@ with torch.no_grad():
         x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
             scaler_manager.scaler.forward(ENV).to(device)
         condition = (gamma, rad, env)
-        print('preparing to sample, passed time: ', time.time() - start, ' seconds from the start')
-        smp = model.shadow.sample(num_samples, device, condition=condition)
-        print(f'sampled {num_samples} samples. passed time: ', time.time() - start, ' seconds from the start')
-        np.save(os.path.join(output_folder, f'sample_{name[0]}.npy'), smp.detach().cpu().numpy())
-        break
+        # print('preparing to sample, passed time: ', time.time() - start, ' seconds from the start')
+        # smp = model.shadow.sample(num_samples, device, condition=condition)
+        # print(f'sampled {num_samples} samples. passed time: ', time.time() - start, ' seconds from the start')
+        # np.save(os.path.join(output_folder, f'sample_{name[0]}.npy'), smp.detach().cpu().numpy())
 
 
 
