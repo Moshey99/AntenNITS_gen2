@@ -104,8 +104,8 @@ if __name__ == "__main__":
                 loss = loss_fn(output, target)
                 val_loss += loss.item()
             print(f'Validation Loss: {val_loss / len(antenna_dataset_loader.val_loader)}')
-            if train_loss < best_loss:
-                best_loss = train_loss
+            if val_loss < best_loss:
+                best_loss = val_loss
                 best_model = model
                 patience = args.patience
             else:
