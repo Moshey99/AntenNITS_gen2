@@ -315,6 +315,8 @@ class ResidualMADE(nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.output_dim_multiplier = output_dim_multiplier
+        assert hidden_dim > 32, 'Hidden dimension must be greater than 32.'
+        self.speq_dim = hidden_dim - 32
         self.conditional = conditional
         self.activation = activation
         self.initial_layer = MaskedLinear(
@@ -328,8 +330,8 @@ class ResidualMADE(nn.Module):
             assert conditioning_dim is not None, 'Dimension of condition variables must be specified.'
         self.spectrum_condition_backbone = GammaRadiationCondition(condition_dim=conditioning_dim)
         self.spectrum_condition_layers = nn.Sequential(self.spectrum_condition_backbone, nn.ELU(),
-                                                       nn.Linear(conditioning_dim, hidden_dim))
-        self.environment_condition_layers = EnvironmentCondition(output_dim=hidden_dim)
+                                                       nn.Linear(conditioning_dim, self.speq_dim))
+        self.environment_condition_layers = EnvironmentCondition(output_dim=hidden_dim - self.speq_dim)
         self.blocks = nn.ModuleList(
             [MaskedResidualBlock(
                 features=hidden_dim,
@@ -353,8 +355,8 @@ class ResidualMADE(nn.Module):
     def forward(self, x, conditional_inputs=None):
         x = self.initial_layer(x)
         spectrum_condition, environment_condition = self.get_conditions(x, conditional_inputs)
-        x += spectrum_condition
-        x += environment_condition
+        x[:, :self.speq_dim] += spectrum_condition
+        x[:, self.speq_dim:] += environment_condition
         for block in self.blocks:
             x = block(x)
         x = self.activation(x)
