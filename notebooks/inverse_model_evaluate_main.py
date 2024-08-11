@@ -2,6 +2,7 @@ import os
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 from models.forward_GammaRad import forward_GammaRad
 
 from AntennaDesign.utils import *
@@ -51,7 +52,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
 parser.add_argument('--forward_checkpoint_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_allalphas.pth')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_best_dict.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
 args = parser.parse_args()
 device = torch.device("cpu")
@@ -74,7 +75,7 @@ model.load_state_dict(torch.load(args.forward_checkpoint_path, map_location=devi
 with torch.no_grad():
     model.eval()
     for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-        if all([name[0] not in sample_name for sample_name in samples_names]):
+        if all([name[0] not in sample_name for sample_name in samples_names]) or idx<15:
             continue
         print(f'evaluating samples for antenna {name[0]}.')
         x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
@@ -90,16 +91,23 @@ with torch.no_grad():
         sorting_idxs = sort_by_metric(*gamma_stats, *radiation_stats)
         gamma_pred_dB_sorted = gamma_pred_dB[sorting_idxs]
         rad_pred_sorted = rad_pred[sorting_idxs]
+        embeddings_sorted = samples[sorting_idxs]
         plot_GT_vs_pred = True
         if plot_GT_vs_pred:
-            antenna_im = image_from_embeddings(pca, x.cpu().numpy().flatten(), shape=(144, 200))
-            plot_condition((gamma, rad), freqs=np.arange(gamma.shape[1] // 2))
+            fig_gt = plot_condition((gamma, rad), freqs=np.arange(gamma.shape[1] // 2))
             gamma_pred_dB_best = gamma_pred_dB_sorted[0].unsqueeze(0)
             rad_pred_best = rad_pred_sorted[0].unsqueeze(0)
-            plot_condition((gamma_pred_dB_best, rad_pred_best), freqs=np.arange(gamma.shape[1] // 2))
+            fig_pred = plot_condition((gamma_pred_dB_best, rad_pred_best), freqs=np.arange(gamma.shape[1] // 2))
+            fig_gt.suptitle("ground truth")
+            fig_pred.suptitle("generated antenna's prediction")
             plt.show()
-        pass
-
-        # fig.suptitle(f'Antenna {name[0]}')
-        # plt.show()
+            # for i in range(len(embeddings_sorted)):
+            #     antenna_im = image_from_embeddings(pca, x.cpu().numpy().flatten(), shape=(144, 200))
+            #     plt.imshow(antenna_im)
+            #     plt.title('Antenna')
+            #     plt.figure()
+            #     antenna_im = image_from_embeddings(pca, embeddings_sorted[i], shape=(144, 200))
+            #     plt.imshow(antenna_im)
+            #     plt.title('Antenna generated, idx: ' + str(i))
+            #     plt.show()
         pass
