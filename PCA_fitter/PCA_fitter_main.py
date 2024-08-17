@@ -41,8 +41,8 @@ test_imgs = all_imgs[split_index:]
 
 def binarize(img, nonmetal_threshold=0.5, feed_threshold=1.5):
     img[img < nonmetal_threshold] = 0
-    # img[img >= feed_threshold] = 2
-    img[img >= nonmetal_threshold] = 1
+    img[img >= feed_threshold] = 2
+    img[(img >= nonmetal_threshold) & (img < feed_threshold)] = 1
     return img
 
 
