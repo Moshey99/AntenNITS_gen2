@@ -23,6 +23,7 @@ def arg_parser():
     parser.add_argument('--checkpoint_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward.pth')
     parser.add_argument('--patience', type=int, default=7, help='early stopping patience')
+    parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
     return parser.parse_args()
 
 
@@ -42,8 +43,8 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
     pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
-    save_embeddings(pca, args.data_path)
-    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, pca=pca, try_cache=True)
+    #save_embeddings(pca, args.data_path)
+    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, pca=pca, try_cache=args.try_cache)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
     model = forward_GammaRad(radiation_channels=12)
     loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda)
