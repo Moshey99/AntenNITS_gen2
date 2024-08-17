@@ -253,8 +253,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     default_patience = 10
     data_path = args.data_path
     assert os.path.exists(data_path)
-    pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size, pca=pca, try_cache=args.try_cache)
+    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
 
     default_dropout = 0
@@ -262,7 +261,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     args.dropout = args.dropout if args.dropout >= 0.0 else default_dropout
     print(args)
 
-    d = pca.n_components
+    d = antenna_dataset_loader.embeddings_shape
 
     max_val = args.bounds[1]  # max(data.trn.x.max(), data.val.x.max(), data.tst.x.max())
     min_val = args.bounds[0]  # min(data.trn.x.min(), data.val.x.min(), data.tst.x.min())

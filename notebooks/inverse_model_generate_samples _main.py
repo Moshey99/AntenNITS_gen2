@@ -85,15 +85,14 @@ device = devices[0]
 
 data_path = args.data_path
 assert os.path.exists(data_path)
-pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, pca=pca, try_cache=True)
+antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1)
 scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
 scaler_manager.try_loading_from_cache()
 if scaler_manager.scaler is None:
     raise ValueError('Scaler not found.')
 print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
 
-d = pca.n_components
+d = antenna_dataset_loader.embeddings_shape
 
 max_val = args.bounds[1]  # max(data.trn.x.max(), data.val.x.max(), data.tst.x.max())
 min_val = args.bounds[0]  # min(data.trn.x.min(), data.val.x.min(), data.tst.x.min())

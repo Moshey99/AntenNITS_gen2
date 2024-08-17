@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 from pytorch_msssim import MSSSIM
 from sklearn.neighbors import NearestNeighbors
-from sklearn.decomposition import PCA
 import time
 import trainer
 import losses
@@ -29,8 +28,7 @@ import open3d as o3d
 import ezdxf
 from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
-from shapely.geometry import Polygon
-from PCA_fitter.PCA_fitter_main import binarize
+from skimage.util import view_as_blocks
 
 
 class DatasetPart:
@@ -225,13 +223,17 @@ class DataPreprocessor:
 
 
 class AntennaDataSet(torch.utils.data.Dataset):
-    def __init__(self, antenna_folders: list[str], pca: PCA, try_cache: bool):
+    def __init__(self, antenna_folders: list[str]):
         self.antenna_folders = antenna_folders
         self.len = len(antenna_folders)
-        self.pca = pca
-        self.try_cache = try_cache
         self.antenna_hw = (144, 200)   #self.antenna_hw = (20, 20)
         self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
+
+    @property
+    def embeddings_shape(self):
+        emb, _, _, _, _ = self.__getitem__(0)
+        return emb.shape[0]
+
 
     def __len__(self):
         return self.len
@@ -241,14 +243,10 @@ class AntennaDataSet(torch.utils.data.Dataset):
         antenna_name = os.path.basename(antenna_folder)
         self.load_antenna(antenna_folder)
         ant_resized = self.resize_antenna()
-        if self.embeddings is None:
-            self.embeddings = self.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
+        ant_blocks = view_as_blocks(ant_resized, block_shape=(4, 4))
+        self.embeddings = np.ceil(np.median(ant_blocks, axis=(2, 3)).flatten())
         self.to_tensors()
-        #np.random.seed(42+idx)
-        #embs = np.random.rand()*np.ones(10)
-        #embs = torch.tensor(embs).float()
         embs = self.embeddings.detach().clone()
-        self.embeddings = None
         return embs, self.gam, self.rad, self.env, antenna_name
 
     def to_tensors(self):
@@ -268,8 +266,6 @@ class AntennaDataSet(torch.utils.data.Dataset):
                                         rates=[4, 2]).squeeze()
         self.rad = self.__clip_radiation(self.rad)
         self.env = np.load(os.path.join(antenna_folder, 'environment.npy'))
-        if self.try_cache and os.path.exists(os.path.join(antenna_folder, 'embeddings.npy')):
-            self.embeddings = np.load(os.path.join(antenna_folder, 'embeddings.npy'))
 
     @staticmethod
     def __clip_radiation(radiation: np.ndarray):
@@ -280,19 +276,20 @@ class AntennaDataSet(torch.utils.data.Dataset):
 
 
 class AntennaDataSetsLoader:
-    def __init__(self, dataset_path: str, batch_size: int, pca: PCA, split_ratio=None, try_cache=True):
+    def __init__(self, dataset_path: str, batch_size: int, split_ratio=None):
         if split_ratio is None:
             split_ratio = [0.8, 0.199, 0.001]
         self.batch_size = batch_size
         self.split = split_ratio
         self.trn_folders, self.val_folders, self.tst_folders = [], [], []
         self.split_data(dataset_path, split_ratio)
-        self.trn_dataset = AntennaDataSet(self.trn_folders, pca, try_cache)
-        self.val_dataset = AntennaDataSet(self.val_folders, pca, try_cache)
-        self.tst_dataset = AntennaDataSet(self.tst_folders, pca, try_cache)
+        self.trn_dataset = AntennaDataSet(self.trn_folders)
+        self.val_dataset = AntennaDataSet(self.val_folders)
+        self.tst_dataset = AntennaDataSet(self.tst_folders)
         self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=batch_size)
         self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=batch_size)
         self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
+        self.embeddings_shape = self.trn_dataset.embeddings_shape
 
     def split_data(self, dataset_path, split_ratio):
         all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]' * 5)))

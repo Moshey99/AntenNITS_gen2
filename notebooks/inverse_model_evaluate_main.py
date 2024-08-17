@@ -64,8 +64,7 @@ output_folder = args.output_folder if args.output_folder is not None else os.pat
 
 samples_folder = os.path.join(output_folder, 'samples')
 samples_names = os.listdir(samples_folder)
-pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, pca=pca, try_cache=False)
+antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1)
 scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
 scaler_manager.try_loading_from_cache()
 if scaler_manager.scaler is None:
