@@ -36,6 +36,8 @@ def list_str_to_list(s):
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
+parser.add_argument('--checkpoint_path', type=str,
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints_inverse\ANT_model_lr_0.0002_hd_256_nr_8_pd_0.975_bs_30.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
 parser.add_argument('-b', '--batch_size', type=int, default=30)
 parser.add_argument('-g', '--gpu', type=str, default='')
@@ -91,7 +93,6 @@ if scaler_manager.scaler is None:
     raise ValueError('Scaler not found.')
 print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
 
-
 d = pca.n_components
 
 max_val = args.bounds[1]  # max(data.trn.x.max(), data.val.x.max(), data.tst.x.max())
@@ -139,7 +140,7 @@ with torch.no_grad():
         condition = (gamma, rad, env)
         model.init_models_architecture(x, condition)
         break
-checkpoint_path = os.path.join(output_folder, f'ANT_model_{model_extra_string}.pth')
+checkpoint_path = args.checkpoint_path
 print('initialized model in: ', time.time() - start, ' seconds from the start')
 model.load_state_dict(torch.load(checkpoint_path, map_location=device))
 print('loaded model in: ', time.time() - start, ' seconds from the start')
@@ -154,6 +155,3 @@ with torch.no_grad():
         # smp = model.shadow.sample(num_samples, device, condition=condition)
         # print(f'sampled {num_samples} samples. passed time: ', time.time() - start, ' seconds from the start')
         # np.save(os.path.join(output_folder, f'sample_{name[0]}.npy'), smp.detach().cpu().numpy())
-
-
-
