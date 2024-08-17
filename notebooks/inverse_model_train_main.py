@@ -214,6 +214,7 @@ parser.add_argument('--scarf', action="store_true")
 parser.add_argument('--bounds', type=list_str_to_list, default='[-10,10]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
+parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
 args = parser.parse_args()
 output_folder = os.path.join(args.data_path,
                              'checkpoints_inverse') if args.output_folder is None else args.output_folder
@@ -222,7 +223,7 @@ conditional = args.conditional
 lr_grid = [2e-4]
 hidden_dim_grid = [256]
 nr_blocks_grid = [8]
-polyak_decay_grid = [0.9995]
+polyak_decay_grid = [0.95]
 batch_size_grid = [15]
 
 max_vals_ll = []
@@ -253,7 +254,7 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
     data_path = args.data_path
     assert os.path.exists(data_path)
     pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size, pca=pca, try_cache=True)
+    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size, pca=pca, try_cache=args.try_cache)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
 
     default_dropout = 0
@@ -376,18 +377,9 @@ for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hi
                 lasts_train_ll.append(train_ll)
                 keep_training = False
 
-            with torch.no_grad():
-                model.eval()
-                test_ll = 0.
-                ema_test_ll = 0.
-                for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.tst_loader):
-                    x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-                        scaler_manager.scaler.forward(ENV).to(device)
-                    test_ll += model.model(x, (gamma, rad, env)).detach().cpu().numpy()
-                    ema_test_ll += model(x, (gamma, rad, env)).detach().cpu().numpy()
 
-                test_ll /= len(antenna_dataset_loader.tst_dataset)
-                ema_test_ll /= len(antenna_dataset_loader.tst_dataset)
+            test_ll = 0
+            ema_test_ll = 0
 
             fmt_str1 = 'epoch: {:3d}, time: {:3d}s, train_ll: {:.4f},'
             fmt_str2 = ' ema_val_ll: {:.4f}, ema_test_ll: {:.4f},'
@@ -419,4 +411,3 @@ min_idx_train = np.argmin(lasts_train_ll)
 print(f'best model according to val set: {model_names[min_idx_val]}')
 print(f'best model according to train set: {model_names[min_idx_train]}')
 print('dict_to_print:', dict_to_print)
-# torch.save(best_model.state_dict(), f'nits_checkpoints\\ANT_model_{model_extra_string}.pth')
