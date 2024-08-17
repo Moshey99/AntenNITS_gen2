@@ -8,6 +8,8 @@ from models.forward_GammaRad import forward_GammaRad
 from AntennaDesign.utils import *
 from forward_model_evaluate_main import plot_condition
 
+from PCA_fitter.PCA_fitter_main import binarize
+
 
 def sort_by_metric(*args):
     sorting_idxs = []
@@ -63,7 +65,7 @@ output_folder = args.output_folder if args.output_folder is not None else os.pat
 samples_folder = os.path.join(output_folder, 'samples')
 samples_names = os.listdir(samples_folder)
 pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, pca=pca, try_cache=True)
+antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, pca=pca, try_cache=False)
 scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
 scaler_manager.try_loading_from_cache()
 if scaler_manager.scaler is None:
@@ -75,7 +77,7 @@ model.load_state_dict(torch.load(args.forward_checkpoint_path, map_location=devi
 with torch.no_grad():
     model.eval()
     for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-        if all([name[0] not in sample_name for sample_name in samples_names]) or idx<15:
+        if all([name[0] not in sample_name for sample_name in samples_names]):
             continue
         print(f'evaluating samples for antenna {name[0]}.')
         x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
@@ -101,13 +103,13 @@ with torch.no_grad():
             fig_gt.suptitle("ground truth")
             fig_pred.suptitle("generated antenna's prediction")
             plt.show()
-            # for i in range(len(embeddings_sorted)):
-            #     antenna_im = image_from_embeddings(pca, x.cpu().numpy().flatten(), shape=(144, 200))
-            #     plt.imshow(antenna_im)
-            #     plt.title('Antenna')
-            #     plt.figure()
-            #     antenna_im = image_from_embeddings(pca, embeddings_sorted[i], shape=(144, 200))
-            #     plt.imshow(antenna_im)
-            #     plt.title('Antenna generated, idx: ' + str(i))
-            #     plt.show()
+            i = 0
+            antenna_im = binarize(image_from_embeddings(pca, x.cpu().numpy().flatten()))
+            plt.imshow(antenna_im)
+            plt.title('Antenna')
+            plt.figure()
+            antenna_im = binarize(image_from_embeddings(pca, embeddings_sorted[i]))
+            plt.imshow(antenna_im)
+            plt.title('Antenna generated, idx: ' + str(i))
+            plt.show()
         pass
