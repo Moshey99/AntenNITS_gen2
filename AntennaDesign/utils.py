@@ -236,6 +236,10 @@ class AntennaDataSet(torch.utils.data.Dataset):
     def __len__(self):
         return self.len
 
+    @property
+    def pca_components_std(self):
+        return np.sqrt(self.pca.explained_variance_)
+
     def __getitem__(self, idx):
         antenna_folder = self.antenna_folders[idx]
         antenna_name = os.path.basename(antenna_folder)
@@ -247,7 +251,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
         #np.random.seed(42+idx)
         #embs = np.random.rand()*np.ones(10)
         #embs = torch.tensor(embs).float()
-        embs = self.embeddings.detach().clone()
+        embs = self.embeddings.detach().clone()/torch.tensor(self.pca_components_std).float()
         self.embeddings = None
         return embs, self.gam, self.rad, self.env, antenna_name
 
