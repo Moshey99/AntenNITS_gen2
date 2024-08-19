@@ -278,7 +278,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
     @staticmethod
     def __clip_radiation(radiation: np.ndarray):
         assert len(radiation.shape) == 3, 'Radiation shape is not 3D (channels, h, w)'
-        radiation[:int(radiation.shape[0] / 2)] = np.clip(radiation[:int(radiation.shape[0] / 2)], -55, 5)
+        radiation[:int(radiation.shape[0] / 2)] = np.clip(radiation[:int(radiation.shape[0] / 2)], -20, 5)
         return radiation
 
 

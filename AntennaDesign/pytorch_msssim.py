@@ -131,7 +131,7 @@ class SSIM(torch.nn.Module):
         return ssim(img1, img2, window=window, window_size=self.window_size, size_average=self.size_average)
 
 class MSSSIM(torch.nn.Module):
-    def __init__(self, radiation_range=[-55,5],window_size=3, size_average=True, channel=3):
+    def __init__(self, radiation_range=[-20,5],window_size=3, size_average=True, channel=3):
         super(MSSSIM, self).__init__()
         self.window_size = window_size
         self.size_average = size_average

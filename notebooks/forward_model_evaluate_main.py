@@ -56,7 +56,7 @@ def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
-    parser.add_argument('--rad_range', type=list, default=[-55, 5], help='range of radiation values for scaling')
+    parser.add_argument('--rad_range', type=list, default=[-20, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
     parser.add_argument('--checkpoint_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_best_dict.pth')
