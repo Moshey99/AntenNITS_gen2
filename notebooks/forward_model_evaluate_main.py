@@ -59,7 +59,7 @@ def arg_parser():
     parser.add_argument('--rad_range', type=list, default=[-20, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_best_dict.pth')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_epoch300.pth')
     return parser.parse_args()
 
 
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         model.eval()
-        for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
+        for idx, sample in enumerate(antenna_dataset_loader.val_loader):
             EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
             embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
                 scaler_manager.scaler.forward(ENV).to(device)
