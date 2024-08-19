@@ -54,7 +54,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
 parser.add_argument('--forward_checkpoint_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_best_dict.pth')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_epoch300.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
 args = parser.parse_args()
 device = torch.device("cpu")
@@ -77,7 +77,7 @@ model.load_state_dict(torch.load(args.forward_checkpoint_path, map_location=devi
 with torch.no_grad():
     model.eval()
     for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-        if all([name[0] not in sample_name for sample_name in samples_names]):
+        if all([name[0] not in sample_name for sample_name in samples_names]) or int(name[0]) < 50000:
             continue
         print(f'evaluating samples for antenna {name[0]}.')
         x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
@@ -108,7 +108,7 @@ with torch.no_grad():
             plt.imshow(antenna_im)
             plt.title('Antenna')
             plt.figure()
-            antenna_im = binarize(image_from_embeddings(pca, embeddings_sorted[i]))
+            antenna_im = image_from_embeddings(pca, embeddings_sorted[i])
             plt.imshow(antenna_im)
             plt.title('Antenna generated, idx: ' + str(i))
             plt.show()
