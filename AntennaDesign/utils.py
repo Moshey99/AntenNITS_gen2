@@ -224,11 +224,26 @@ class DataPreprocessor:
         print('Geometries saved successfully as an stl formated 3D triangle mesh')
 
 
+class PCAWrapper:
+    def __init__(self, pca: PCA):
+        self.pca = pca
+
+    @property
+    def pca_components_std(self) -> torch.Tensor:
+        return torch.tensor(np.sqrt(self.pca.explained_variance_))
+
+    def normalize_principal_components(self, components: torch.Tensor) -> torch.Tensor:
+        return components / (self.pca_components_std + 1e-7)
+
+    def unnormalize_principal_components(self, components: torch.Tensor) -> torch.Tensor:
+        return components * (self.pca_components_std + 1e-7)
+
+
 class AntennaDataSet(torch.utils.data.Dataset):
-    def __init__(self, antenna_folders: list[str], pca: PCA, try_cache: bool):
+    def __init__(self, antenna_folders: list[str], pca_wrapper: PCAWrapper, try_cache: bool):
         self.antenna_folders = antenna_folders
         self.len = len(antenna_folders)
-        self.pca = pca
+        self.pca_wrapper = pca_wrapper
         self.try_cache = try_cache
         self.antenna_hw = (144, 200)   #self.antenna_hw = (20, 20)
         self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
@@ -236,22 +251,18 @@ class AntennaDataSet(torch.utils.data.Dataset):
     def __len__(self):
         return self.len
 
-    @property
-    def pca_components_std(self):
-        return np.sqrt(self.pca.explained_variance_)
-
     def __getitem__(self, idx):
         antenna_folder = self.antenna_folders[idx]
         antenna_name = os.path.basename(antenna_folder)
         self.load_antenna(antenna_folder)
         ant_resized = self.resize_antenna()
         if self.embeddings is None:
-            self.embeddings = self.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
+            self.embeddings = self.pca_wrapper.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
         self.to_tensors()
         #np.random.seed(42+idx)
         #embs = np.random.rand()*np.ones(10)
         #embs = torch.tensor(embs).float()
-        embs = self.embeddings.detach().clone()/torch.tensor(self.pca_components_std).float()
+        embs = self.embeddings.detach().clone()
         self.embeddings = None
         return embs, self.gam, self.rad, self.env, antenna_name
 
@@ -287,13 +298,14 @@ class AntennaDataSetsLoader:
     def __init__(self, dataset_path: str, batch_size: int, pca: PCA, split_ratio=None, try_cache=True):
         if split_ratio is None:
             split_ratio = [0.8, 0.199, 0.001]
+        self.pca_wrapper = PCAWrapper(pca)
         self.batch_size = batch_size
         self.split = split_ratio
         self.trn_folders, self.val_folders, self.tst_folders = [], [], []
         self.split_data(dataset_path, split_ratio)
-        self.trn_dataset = AntennaDataSet(self.trn_folders, pca, try_cache)
-        self.val_dataset = AntennaDataSet(self.val_folders, pca, try_cache)
-        self.tst_dataset = AntennaDataSet(self.tst_folders, pca, try_cache)
+        self.trn_dataset = AntennaDataSet(self.trn_folders, self.pca_wrapper, try_cache)
+        self.val_dataset = AntennaDataSet(self.val_folders, self.pca_wrapper, try_cache)
+        self.tst_dataset = AntennaDataSet(self.tst_folders, self.pca_wrapper, try_cache)
         self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=batch_size)
         self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=batch_size)
         self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
