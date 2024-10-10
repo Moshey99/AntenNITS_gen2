@@ -40,10 +40,10 @@ class DataLoader:
         return self.n_batches
 
 class EMA(nn.Module):
-    def __init__(self, model: nn.Module, shadow: nn.Module, decay: float):
+    def __init__(self, model: nn.Module, shadow: nn.Module, decay: float, decay_growth: float = 1.0):
         super().__init__()
         self.decay = decay
-
+        self.decay_growth = decay_growth
         self.model = model
         self.shadow = shadow
         
@@ -51,6 +51,9 @@ class EMA(nn.Module):
 
         for param in self.shadow.parameters():
             param.detach_()
+
+    def update_decay(self):
+        self.decay *= self.decay_growth
 
     @torch.no_grad()
     def update(self, copy_all=False):

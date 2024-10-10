@@ -1,6 +1,6 @@
 import copy
 import shutil
-from typing import Union
+from typing import Union, Optional
 import cv2
 import scipy.io as sio
 from scipy.ndimage import zoom
@@ -73,8 +73,8 @@ class DataPreprocessor:
                 env_vals = list(env_dict.values())
                 assert np.all([type(value) != list for value in env_vals]), 'ERROR. List in Environments values'
                 if not debug:
-                    np.save(os.path.join(Path(folder_path).parent, 'processed', i, 'environment.npy'), np.array(env_vals))
-
+                    np.save(os.path.join(Path(folder_path).parent, 'processed', i, 'environment.npy'),
+                            np.array(env_vals))
 
     def radiation_preprocessor(self, plot=False, debug=False):
         print('Preprocessing radiations')
@@ -175,68 +175,38 @@ class DataPreprocessor:
         print('All gamma rules are satisfied!')
         return True
 
-    def geometry_preprocessor(self):
-        print('Preprocessing geometries')
-        voxel_size = 0.125
-        min_bound_org = np.array([5.4, 3.825, 6.375]) - voxel_size
-        max_bound_org = np.array([54., 3.83, 42.5]) + voxel_size
-        for i in range(2335, 10000):
-            if i == 3234 or i == 9729:
-                continue
-            # a = np.load(r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_10000x1\data\processed_data\voxels\voxels_2050.npy')
-            # plt.imshow(a[:,0,:].T)
-            # plt.show()
-            mesh = o3d.io.read_triangle_mesh(
-                rf"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_10000x1\data\models\{i}\Antenna_PEC_STEP.stl")
-            # o3d.visualization.draw_geometries([mesh])
-            vg = o3d.geometry.VoxelGrid.create_from_triangle_mesh_within_bounds(
-                mesh, voxel_size=voxel_size, min_bound=min_bound_org, max_bound=max_bound_org)
-            voxels = vg.get_voxels()
-            indices = np.stack(list(vx.grid_index for vx in voxels))
-            quary_x = np.arange(min_bound_org[0] + 0.5 * voxel_size, max_bound_org[0], step=voxel_size)
-            quary_y = [3.825000047683716]
-            quary_z = np.arange(min_bound_org[2] + 0.5 * voxel_size, max_bound_org[2], step=voxel_size)
-            quary_array = np.zeros((len(quary_x), 1, len(quary_z)))
-            start = time.time()
-            for ii, x_val in enumerate(quary_x):
-                for jj, y_val in enumerate(quary_y):
-                    for kk, z_val in enumerate(quary_z):
-                        ind = vg.get_voxel([x_val, y_val, z_val])
-                        exists = np.any(np.all(indices == ind, axis=1))
-                        quary_array[ii, jj, kk] = exists
-            np.save(os.path.join(
-                r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_10000x1\data\processed_data\voxels',
-                f'voxels_{i}.npy'), quary_array.astype(bool))
-            print(f'saved antenna {i}. Process time was:', time.time() - start)
-
-    def stp_to_stl(self):
-        import trimesh
-        model_folder = 'C:\\Users\\moshey\\PycharmProjects\\etof_folder_git\\AntennaDesign_data\\data_10000x1\\data\\nits_checkpoints'
-        all = []
-        for i in range(10000):
-            print('working on antenna number:', i + 1, 'out of:', self.num_data_points)
-            stp_path = os.path.join(model_folder, f'{i}', 'Antenna_PEC_STEP.stp')
-            mesh = trimesh.Trimesh(**trimesh.interfaces.gmsh.load_gmsh(
-                file_name=stp_path, gmsh_args=[("Mesh.Algorithm", 1), ("Mesh.CharacteristicLengthFromCurvature", 1),
-                                               ("General.NumThreads", 10),
-                                               ("Mesh.MinimumCirclePoints", 32)]))
-            mesh.export(os.path.join(model_folder, f'{i}', 'Antenna_PEC_STEP.stl'))
-        print('Geometries saved successfully as an stl formated 3D triangle mesh')
-
 
 class PCAWrapper:
-    def __init__(self, pca: PCA):
+    def __init__(self, pca: Optional[PCA]):
         self.pca = pca
 
     @property
-    def pca_components_std(self) -> torch.Tensor:
-        return torch.tensor(np.sqrt(self.pca.explained_variance_))
+    def pca_components_std(self) -> np.ndarray:
+        return np.sqrt(self.pca.explained_variance_)
 
-    def normalize_principal_components(self, components: torch.Tensor) -> torch.Tensor:
+    def normalize_principal_components(self, components: np.ndarray) -> np.ndarray:
         return components / (self.pca_components_std + 1e-7)
 
-    def unnormalize_principal_components(self, components: torch.Tensor) -> torch.Tensor:
+    def unnormalize_principal_components(self, components: np.ndarray) -> np.ndarray:
         return components * (self.pca_components_std + 1e-7)
+
+    def image_from_components(self, components: np.ndarray, shape=(144, 200)):
+        n_samples, n_features = components.shape
+        ant_resized = self.pca.inverse_transform(components).reshape((n_samples, *shape))
+        return ant_resized
+
+    def components_from_image(self, image: np.ndarray) -> np.ndarray:
+        n_samples, h, w = image.shape
+        return self.pca.transform(image.flatten().reshape(n_samples, -1))
+
+    def apply_binarization_on_components(self, components: np.ndarray) -> np.ndarray:
+        image = self.image_from_components(components)
+        image_binarized = binarize(image)
+        return self.components_from_image(image_binarized)
+
+    def apply_unnormalization_and_binarization_on_components(self, components: np.ndarray) -> np.ndarray:
+        components_unnormalized = self.unnormalize_principal_components(components)
+        return self.apply_binarization_on_components(components_unnormalized)
 
 
 class AntennaDataSet(torch.utils.data.Dataset):
@@ -245,7 +215,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.len = len(antenna_folders)
         self.pca_wrapper = pca_wrapper
         self.try_cache = try_cache
-        self.antenna_hw = (144, 200)   #self.antenna_hw = (20, 20)
+        self.antenna_hw = (144, 200)  # self.antenna_hw = (20, 20)
         self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
 
     def __len__(self):
@@ -257,11 +227,14 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.load_antenna(antenna_folder)
         ant_resized = self.resize_antenna()
         if self.embeddings is None:
-            self.embeddings = self.pca_wrapper.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
+            if self.pca_wrapper.pca is not None:
+                self.embeddings = self.pca_wrapper.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
+            else:
+                self.embeddings = ant_resized
         self.to_tensors()
-        #np.random.seed(42+idx)
-        #embs = np.random.rand()*np.ones(10)
-        #embs = torch.tensor(embs).float()
+        # np.random.seed(42+idx)
+        # embs = np.random.rand()*np.ones(10)
+        # embs = torch.tensor(embs).float()
         embs = self.embeddings.detach().clone()
         self.embeddings = None
         return embs, self.gam, self.rad, self.env, antenna_name
@@ -293,9 +266,8 @@ class AntennaDataSet(torch.utils.data.Dataset):
         return radiation
 
 
-
 class AntennaDataSetsLoader:
-    def __init__(self, dataset_path: str, batch_size: int, pca: PCA, split_ratio=None, try_cache=True):
+    def __init__(self, dataset_path: str, batch_size: int, pca: Optional[PCA], split_ratio=None, try_cache=True):
         if split_ratio is None:
             split_ratio = [0.8, 0.199, 0.001]
         self.pca_wrapper = PCAWrapper(pca)
@@ -626,9 +598,19 @@ def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
 
 class DXF2IMG(object):
     default_img_format = '.png'
-    default_img_res = 30  # Adjust DPI for better quality
+    default_img_res = 12  # Adjust DPI for better quality
 
     def convert_dxf2img(self, names, img_format=default_img_format, img_res=default_img_res):
+        def fig2img(fig):
+            from PIL import Image
+            """Convert a Matplotlib figure to a PIL Image and return it"""
+            import io
+            buf = io.BytesIO()
+            fig.savefig(buf)
+            buf.seek(0)
+            img = Image.open(buf)
+            return img
+
         for name in names:
             doc = ezdxf.readfile(name)
             msp = doc.modelspace()
@@ -647,11 +629,16 @@ class DXF2IMG(object):
             ctx.current_layout_properties.set_colors(bg='#FFFFFF')
             out = MatplotlibBackend(ax)
             Frontend(ctx, out).draw_layout(msp, finalize=True)
+            p = ax.transData.transform((19, 26))
+            img = np.array(fig2img(fig))
+            plt.figure()
+            plt.imshow(img)
 
             # Construct the output image file path
+            plt.show()
             img_name = re.findall("(\S+)\.", name)[0]  # Select the image name that is the same as the DXF file name
             img_path = f"{img_name}{img_format}"
-            fig.savefig(img_path, dpi=img_res)
+            fig.savefig(img_path)
             plt.close(fig)  # Close the figure to free up memory
 
 
@@ -697,19 +684,18 @@ def merge_dxf_files(input_files, output_file):
 
 def run_dxf2img():
     dxf2img = DXF2IMG()
-    all_images = []
-    data_path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\models"
+    data_path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\simplified_dataset"
     for model_path in sorted(os.listdir(data_path)):
         merged_output_path = os.path.join(data_path, model_path, 'merged_hatch.dxf')
-        if os.path.exists(merged_output_path):
-            print('already processed:', model_path)
-            continue
+        # if os.path.exists(merged_output_path):
+        #     print('already processed:', model_path)
+        #     # continue
         print('working on model:', model_path)
         layer_path = os.path.join(data_path, model_path, 'layer_0_PEC.dxf')
         feed_pec_path = os.path.join(data_path, model_path, 'feed_PEC.dxf')
         feed_path = os.path.join(data_path, model_path, 'feed.dxf')
         layer_output_path = fill_lwpolylines_with_hatch(layer_path)
-        feed_pec_output_path = fill_lwpolylines_with_hatch(feed_pec_path)
+        feed_pec_output_path = fill_lwpolylines_with_hatch(feed_pec_path, color=2)
         feed_output_path = fill_lwpolylines_with_hatch(feed_path, color=1)
         merge_dxf_files([layer_output_path, feed_pec_output_path, feed_output_path], merged_output_path)
         dxf2img.convert_dxf2img([merged_output_path])
@@ -783,6 +769,7 @@ def organize_dataset_per_antenna():
         print('Antenna number:', idx, 'saved successfully')
     pass
 
+
 def gen2_organize_from_npz(npz_file, output_folder):
     data = np.load(npz_file)
     radiations, gammas, idxs = data['radiation'], data['gamma'], data['index']
@@ -817,12 +804,28 @@ if __name__ == '__main__':
     # data_processor.assert_gamma_rules(gamma)
     # data_processor.assert_radiation_rules(radiation)
     # pass
+    # import matplotlib.pyplot as plt
+    # import numpy as np
+    #
+    # import matplotlib.patches as mpatches
+    #
+    # x = np.arange(0, 10, 0.005)
+    # y = np.exp(-x / 2.) * np.sin(2 * np.pi * x)
+    #
+    # fig, ax = plt.subplots()
+    # ax.plot(x, y)
+    # ax.set_xlim(0, 10)
+    # ax.set_ylim(-1, 1)
+    #
+    # plt.show()
     run_dxf2img()
-    gen2_organize_from_npz(r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\results_simulator.npz',
-                           output_folder=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\processed')
-    DataPreprocessor(r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\fol'
-                     r'der_to_transfer_many_alphas\models').environment_preprocessor()
-    gen2_gather_antennas(output_folder=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\processed',
-                         data_folder1=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\models')
+    # gen2_organize_from_npz(
+    #     r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\results_simulator.npz',
+    #     output_folder=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\processed')
+    # DataPreprocessor(r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\fol'
+    #                  r'der_to_transfer_many_alphas\models').environment_preprocessor()
+    # gen2_gather_antennas(
+    #     output_folder=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\processed',
+    #     data_folder1=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\models')
 
     pass

@@ -18,9 +18,9 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarr
     ax1.plot(freqs, gamma_amp[0].cpu().detach().numpy(), 'b-')
     ax11 = ax1.twinx()
     ax11.plot(freqs, gamma_phase[0].cpu().detach().numpy(), 'r-')
-    ax2.imshow(rad[0, 0].cpu().detach().numpy())
-    ax3.imshow(rad[0, 2].cpu().detach().numpy())
-    ax4.imshow(rad[0, 4].cpu().detach().numpy())
+    ax2.imshow(rad[0, 0].cpu().detach().numpy(), vmin=-20, vmax=5)
+    ax3.imshow(rad[0, 2].cpu().detach().numpy(), vmin=-20, vmax=5)
+    ax4.imshow(rad[0, 4].cpu().detach().numpy(), vmin=-20, vmax=5)
     ax1.set_title('gamma')
     ax1.set_ylabel('amplitude', color='b')
     ax1.set_ylim([-20, 0])
@@ -77,8 +77,6 @@ if __name__ == "__main__":
     if scaler_manager.scaler is None:
         raise ValueError('Scaler not found.')
     for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
-        if idx == 1:
-            break
         EMBEDDINGS, GAMMA, RADIATION, ENV, _ = sample
         embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
             scaler_manager.scaler.forward(ENV).to(device)
