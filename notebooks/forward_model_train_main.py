@@ -17,7 +17,7 @@ def arg_parser():
     parser.add_argument('--epochs', type=int, default=120)
     parser.add_argument('--gamma_schedule', type=float, default=0.95, help='gamma decay rate')
     parser.add_argument('--step_size', type=int, default=1, help='step size for gamma decay')
-    parser.add_argument('--rad_range', type=list, default=[-55, 5], help='range of radiation values for scaling')
+    parser.add_argument('--rad_range', type=list, default=[-20, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
     parser.add_argument('--lamda', type=int, default=1, help='weight for radiation in gamma radiation loss')
     parser.add_argument('--checkpoint_path', type=str,

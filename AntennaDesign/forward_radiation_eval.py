@@ -42,7 +42,7 @@ def main():
     inv_or_forw = args.inv_or_forw
     sample = args.sample
     #---------------
-    model = forward_radiation.Radiation_Generator([-55,5])
+    model = forward_radiation.Radiation_Generator([-20,5])
     loss_fn = None
     model.to(device)
     model.load_state_dict(torch.load(args.model_path,map_location=device))

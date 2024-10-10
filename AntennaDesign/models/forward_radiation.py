@@ -8,7 +8,7 @@ class Radiation_Generator(nn.Module):
     def __init__(self, radiation_channels, radiation_range=None):
         super(Radiation_Generator, self).__init__()
         if radiation_range is None:
-            radiation_range = [-55, 5]
+            radiation_range = [-20, 5]
         self.activation = nn.ELU()
         self.length = radiation_range[1] - radiation_range[0]
         self.radiation_range = radiation_range

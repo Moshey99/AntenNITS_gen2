@@ -1,4 +1,5 @@
 import os
+from io import BytesIO
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,7 +10,13 @@ from AntennaDesign.utils import *
 from forward_model_evaluate_main import plot_condition
 
 from PCA_fitter.PCA_fitter_main import binarize
-
+def figure_to_image(fig):
+    buf = BytesIO()
+    fig.savefig(buf, format='png')
+    buf.seek(0)
+    img = plt.imread(buf)
+    buf.close()
+    return img
 
 def sort_by_metric(*args):
     sorting_idxs = []
@@ -45,16 +52,11 @@ def extend_to_fit_samples(num_samples: int, env: torch.Tensor, gamma: torch.Tens
     return gamma, rad, env
 
 
-def image_from_embeddings(pca_, embeddings: np.ndarray, shape=(144, 200)):
-    ant_resized = pca_.inverse_transform(embeddings).reshape(shape)
-    return ant_resized
-
-
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
 parser.add_argument('--forward_checkpoint_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_best_dict.pth')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward_epoch170.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
 args = parser.parse_args()
 device = torch.device("cpu")
@@ -84,8 +86,10 @@ with torch.no_grad():
             scaler_manager.scaler.forward(ENV).to(device)
 
         samples = np.load(os.path.join(samples_folder, f'sample_{name[0]}.npy'))
+        samples = torch.tensor(
+            antenna_dataset_loader.pca_wrapper.apply_binarization_on_components(samples)).float().to(device)
         gamma_ext, rad_ext, env_ext = extend_to_fit_samples(samples.shape[0], env, gamma, rad)
-        geometries = torch.cat((torch.tensor(samples).float().to(device), env_ext), dim=1)
+        geometries = torch.cat((samples, env_ext), dim=1)
         gamma_pred, rad_pred = model(geometries)
         gamma_pred_dB = gamma_to_dB(gamma_pred)
         gamma_stats = produce_gamma_stats(gamma_ext, gamma_pred_dB, dataset_type='dB')
@@ -96,20 +100,36 @@ with torch.no_grad():
         embeddings_sorted = samples[sorting_idxs]
         plot_GT_vs_pred = True
         if plot_GT_vs_pred:
+            figs_gt, axs_gt = plt.subplots(2, 1, figsize=(5, 10))
             fig_gt = plot_condition((gamma, rad), freqs=np.arange(gamma.shape[1] // 2))
-            gamma_pred_dB_best = gamma_pred_dB_sorted[0].unsqueeze(0)
-            rad_pred_best = rad_pred_sorted[0].unsqueeze(0)
-            fig_pred = plot_condition((gamma_pred_dB_best, rad_pred_best), freqs=np.arange(gamma.shape[1] // 2))
-            fig_gt.suptitle("ground truth")
-            fig_pred.suptitle("generated antenna's prediction")
-            plt.show()
-            i = 0
-            antenna_im = binarize(image_from_embeddings(pca, x.cpu().numpy().flatten()))
-            plt.imshow(antenna_im)
-            plt.title('Antenna')
-            plt.figure()
-            antenna_im = binarize(image_from_embeddings(pca, embeddings_sorted[i]))
-            plt.imshow(antenna_im)
-            plt.title('Antenna generated, idx: ' + str(i))
+            img_gt = figure_to_image(fig_gt)
+            plt.close(fig_gt)
+            axs_gt[1].imshow(img_gt)
+            axs_gt[1].set_title('GT target')
+            axs_gt[1].axis('off')
+            antenna_im = antenna_dataset_loader.pca_wrapper.image_from_components(x.cpu().numpy()).squeeze()
+            axs_gt[0].imshow(antenna_im, vmin=0, vmax=2)
+            axs_gt[0].set_title('GT Antenna')
+            axs_gt[0].axis('off')
+
+            fig, axs = plt.subplots(2, 3, figsize=(15, 10))
+
+            for i in [0, 1, 2]:
+                gamma_pred_dB_best = gamma_pred_dB_sorted[i].unsqueeze(0)
+                rad_pred_best = rad_pred_sorted[i].unsqueeze(0)
+
+                fig_pred = plot_condition((gamma_pred_dB_best, rad_pred_best), freqs=np.arange(gamma.shape[1] // 2))
+                img_pred = figure_to_image(fig_pred)
+                plt.close(fig_pred)
+                axs[1, i].imshow(img_pred)
+                axs[1, i].set_title(f'Generated Prediction, idx: {i}')
+                axs[1, i].axis('off')  # Turn off axes for better visualization
+                antenna_im = antenna_dataset_loader.pca_wrapper.image_from_components(
+                    embeddings_sorted[i:i + 1]).squeeze()
+                axs[0, i].imshow(antenna_im, vmin=0, vmax=2)
+                axs[0, i].set_title(f' Generated Antenna, idx: {i}')
+                axs[0, i].axis('off')
+
+            plt.tight_layout()
             plt.show()
         pass
