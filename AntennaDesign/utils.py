@@ -279,9 +279,9 @@ class AntennaDataSet(torch.utils.data.Dataset):
             if self.embeddings is None:
                 self.embeddings = self.pca_wrapper.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
             else:
-                self.embeddings = ant_resized
+                self.embeddings = copy.deepcopy(ant_resized)
         else:
-            self.embeddings = self.ant
+            self.embeddings = copy.deepcopy(self.ant)
 
     def to_tensors(self):
         self.embeddings = torch.tensor(self.embeddings).float()
@@ -472,7 +472,7 @@ class standard_scaler:
 
     def forward(self, data):
         assert self.mean is not None and self.std is not None, 'Scaler is not fitted'
-        std_mask = self.std == 0
+        std_mask = self.std < 1e-7
         std_copy = self.std.copy()
         std_copy[std_mask] = 1
         return (data - self.mean) / std_copy
