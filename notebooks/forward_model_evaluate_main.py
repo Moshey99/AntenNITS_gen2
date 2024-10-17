@@ -18,9 +18,9 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarr
     ax1.plot(freqs, gamma_amp[0].cpu().detach().numpy(), 'b-')
     ax11 = ax1.twinx()
     ax11.plot(freqs, gamma_phase[0].cpu().detach().numpy(), 'r-')
-    ax2.imshow(rad[0, 0].cpu().detach().numpy(), vmin=-20, vmax=5)
-    ax3.imshow(rad[0, 2].cpu().detach().numpy(), vmin=-20, vmax=5)
-    ax4.imshow(rad[0, 4].cpu().detach().numpy(), vmin=-20, vmax=5)
+    ax2.imshow(rad[0, 0].cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
+    ax3.imshow(rad[0, 2].cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
+    ax4.imshow(rad[0, 4].cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
     ax1.set_title('gamma')
     ax1.set_ylabel('amplitude', color='b')
     ax1.set_ylim([-20, 0])
@@ -55,11 +55,11 @@ def produce_stats_all_dataset(gamma_stats: List[tuple], radiation_stats: List[tu
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_120k_140k_processed')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
     parser.add_argument('--rad_range', type=list, default=[-20, 5], help='range of radiation values for scaling')
-    parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
+    parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_120k_140k_processed\checkpoints\forward_epoch30.pth")
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints\forward_best_dict.pth")
     return parser.parse_args()
 
 
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     args = arg_parser()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
-    #pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
+    # pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
     antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=1, try_cache=True)
     model = forward_GammaRad(radiation_channels=12)
     env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
@@ -94,7 +94,7 @@ if __name__ == "__main__":
         model.eval()
         for idx, sample in enumerate(antenna_dataset_loader.val_loader):
             EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
-            embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device),\
+            embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), \
                 env_scaler_manager.scaler.forward(ENV).float().to(device)
             if antenna_dataset_loader.batch_size == 1 and gamma[:, :int(gamma.shape[1] // 2)].min() > -1.5:

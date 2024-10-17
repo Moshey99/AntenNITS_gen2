@@ -328,7 +328,7 @@ class AntennaDataSetsLoader:
 
     def split_data(self, dataset_path, split_ratio):
         all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]*')))
-        all_folders = [folder for folder in all_folders if os.path.basename(folder).startswith('13')]
+        all_folders = [folder for folder in all_folders if not os.path.basename(folder).startswith('12')]
         random.seed(42)
         random.shuffle(all_folders)
         trn_len = int(len(all_folders) * split_ratio[0])
@@ -828,12 +828,23 @@ def gen2_organize_from_npz(npz_file, output_folder):
         pass
 
 
+def get_size(path):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            # skip if it is a symbolic link
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+    return total_size
+
+
 if __name__ == '__main__':
-    data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_120k_140k'
-    destination_path = data_path.replace('data_120k_140k', 'data_120k_140k_processed')
+    data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_raw'
+    destination_path = data_path.replace(os.path.basename(data_path), 'data_110k_150k_processed')
     preprocessor = DataPreprocessor(data_path=data_path, destination_path=destination_path)
     preprocessor.antenna_preprocessor()
-    # preprocessor.radiation_preprocessor()
-    # preprocessor.gamma_preprocessor()
     preprocessor.environment_preprocessor()
+    preprocessor.radiation_preprocessor()
+    preprocessor.gamma_preprocessor()
     pass

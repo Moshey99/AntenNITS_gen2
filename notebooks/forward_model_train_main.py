@@ -11,18 +11,19 @@ import pickle
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_120k_140k_processed')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
     parser.add_argument('--batch_size', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-3, help='initial learning rate')
     parser.add_argument('--epochs', type=int, default=120)
     parser.add_argument('--gamma_schedule', type=float, default=0.95, help='gamma decay rate')
     parser.add_argument('--step_size', type=int, default=1, help='step size for gamma decay')
     parser.add_argument('--rad_range', type=list, default=[-20, 5], help='range of radiation values for scaling')
-    parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
-    parser.add_argument('--lamda', type=int, default=1, help='weight for radiation in gamma radiation loss')
+    parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
+    parser.add_argument('--rad_phase_fac', type=float, default=0., help='weight for phase in radiation loss')
+    parser.add_argument('--lamda', type=float, default=1., help='weight for radiation in gamma radiation loss')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_120k_140k_processed\checkpoints\forward.pth')
-    parser.add_argument('--patience', type=int, default=7, help='early stopping patience')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints\forward.pth')
+    parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
     parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
     return parser.parse_args()
 
@@ -46,7 +47,7 @@ if __name__ == "__main__":
     antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, try_cache=args.try_cache)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
     model = forward_GammaRad(radiation_channels=12)
-    loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda)
+    loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda, rad_phase_fac=args.rad_phase_fac, euc_weight=0.5)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_schedule)
