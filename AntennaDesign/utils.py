@@ -50,16 +50,40 @@ class AntennaData:
 
 
 class DataPreprocessor:
-    def __init__(self, folder_path=None):
-        if folder_path is not None:
-            self.num_data_points = len(os.listdir(folder_path))
-            self.folder_path = folder_path
+    def __init__(self, data_path=None, destination_path=None):
+        if data_path is not None:
+            self.num_data_points = len(os.listdir(data_path))
+            self.folder_path = data_path
+        if destination_path is not None:
+            self.destination_path = destination_path
+            os.makedirs(destination_path, exist_ok=True)
+
+    def antenna_preprocessor(self, debug=False):
+        scaler = standard_scaler()
+        scaler_manager = ScalerManager(path=os.path.join(self.destination_path, 'ant_scaler.pkl'), scaler=scaler)
+        print('Preprocessing antennas')
+        all_ants = []
+        folder_path = self.folder_path
+        for i in sorted(os.listdir(folder_path)):
+            print('working on antenna number:', i, 'out of:', self.num_data_points)
+            file_path = os.path.join(folder_path, i, 'ant_parameters.pickle')
+            with open(file_path, 'rb') as f:
+                antenna_dict = pickle.load(f)
+            antenna = np.array(list(antenna_dict.values()))
+            all_ants.append(antenna)
+            if not debug:
+                output_folder = os.path.join(self.destination_path, i)
+                os.makedirs(output_folder, exist_ok=True)
+                np.save(os.path.join(output_folder, 'antenna.npy'), antenna)
+        scaler_manager.fit(np.array(all_ants))
+        scaler_manager.dump()
+        print(f'Antennas saved successfully')
 
     def environment_preprocessor(self, debug=False):
-        # TODO: add the plane parameter to the environments
         print('Preprocessing environments')
+        scaler = standard_scaler()
+        scaler_manager = ScalerManager(path=os.path.join(self.destination_path, 'env_scaler.pkl'), scaler=scaler)
         all_envs = []
-        last_env = []
         folder_path = self.folder_path
         for i in sorted(os.listdir(folder_path)):
             print('working on environment number:', i, 'out of:', self.num_data_points)
@@ -72,82 +96,88 @@ class DataPreprocessor:
                 env_dict['plane'] = 0 if plane == 'xz' else 1
                 env_vals = list(env_dict.values())
                 assert np.all([type(value) != list for value in env_vals]), 'ERROR. List in Environments values'
+                all_envs.append(env_vals)
                 if not debug:
-                    np.save(os.path.join(Path(folder_path).parent, 'processed', i, 'environment.npy'),
-                            np.array(env_vals))
+                    output_folder = os.path.join(self.destination_path, i)
+                    os.makedirs(output_folder, exist_ok=True)
+                    np.save(os.path.join(output_folder, 'environment.npy'), np.array(env_vals))
+        scaler_manager.fit(np.array(all_envs))
+        scaler_manager.dump()
+        print(f'Environments saved successfully')
 
-    def radiation_preprocessor(self, plot=False, debug=False):
+    def radiation_preprocessor(self, selected_frequencies=None, plot=False, debug=False):
         print('Preprocessing radiations')
-        all_radiations = []
+        if selected_frequencies is None:
+            selected_frequencies = [1500, 2100, 2400]
         folder_path = self.folder_path
         for idx, i in enumerate(os.listdir(folder_path)):
             print('working on antenna number:', i, 'out of:', self.num_data_points)
-            im_resized = np.zeros((4, 181, 91))
-            file_path = os.path.join(folder_path, i, f'{i}_farfield.txt')
-            df = pd.read_csv(file_path, sep='\s+', skiprows=[0, 1], header=None)
-            df = df.apply(pd.to_numeric, errors='coerce')
-            arr = np.asarray(df)
-            angle_res = arr[1, 0] - arr[0, 0]
-            angle1_res = int(180 / angle_res + 1)
-            angle2_res = int(360 / angle_res)
-            im = arr[:, 3:7]
-            im_resh = np.transpose(im.reshape(angle2_res, angle1_res, -1), (2, 0, 1))
-            im_resh = im_resh[[0, 2, 1, 3], :, :]  # rearrange the channels to be [mag1, mag2, phase1, phase2]
-            for j in range(im_resh.shape[0]):
-                current_im = im_resh[j]
-                im_resized[j] = np.clip(cv2.resize(current_im, (91, 181), interpolation=cv2.INTER_LINEAR),
-                                        current_im.min(), current_im.max())
-                if plot:
-                    titles = ['mag1', 'mag2', 'phase1', 'phase2']
-                    plt.subplot(2, 2, j + 1)
+            sample_folder = os.path.join(folder_path, i)
+            efficiency = self.load_efficiency(sample_folder)
+            all_frequencies = []
+            for freq in selected_frequencies:
+                freq_efficiency = self.find_efficiency_for_f(efficiency, freq)
+                file_path = os.path.join(sample_folder, f'farfield (f={freq}) [1].txt')
+                im_resized = np.zeros((4, 181, 91))
+                df = pd.read_csv(file_path, sep='\s+', skiprows=[0, 1], header=None)
+                df = df.apply(pd.to_numeric, errors='coerce')
+                arr = np.asarray(df)
+                angle_res = arr[1, 0] - arr[0, 0]
+                angle1_res = int(180 / angle_res + 1)
+                angle2_res = int(360 / angle_res)
+                im = arr[:, 3:7]
+                im_resh = np.transpose(im.reshape(angle2_res, angle1_res, -1), (2, 0, 1))
+                im_resh = im_resh[[0, 2, 1, 3], :, :]  # rearrange the channels to be [mag1, mag2, phase1, phase2]
+                for j in range(im_resh.shape[0]):
+                    current_im = np.clip(cv2.resize(im_resh[j], (91, 181), interpolation=cv2.INTER_LINEAR),
+                                         im_resh[j].min(), im_resh[j].max())
                     if j < 2:
-                        assert np.all(im_resized[j] >= 0), 'Negative values in radiation magnitude'
-                        im_resized[j] = 10 * np.log10(im_resized[j])
+                        assert np.all(current_im >= 0), 'Negative values in radiation magnitude'
+                        current_im = current_im * freq_efficiency
+                        current_im = 10 * np.log10(current_im)
                     else:
-                        assert np.all(im_resized[j] >= 0) and np.all(
-                            im_resized[j] <= 360), 'Phase values out of range 0-360'
-                        im_resized[j] = np.deg2rad(im_resized[j]) - np.pi
-                    plt.imshow(im_resized[j])
-                    plt.title(titles[j])
-                    plt.colorbar()
-                    plt.show()
-            all_radiations.append(im_resized)
+                        assert np.all(current_im >= 0) and np.all(current_im <= 360), 'Phase values out of range 0-360'
+                        current_im = np.deg2rad(current_im) - np.pi
 
-        all_radiations = np.array(all_radiations)
+                    im_resized[j] = current_im
+                    if plot:
+                        titles = ['mag1', 'mag2', 'phase1', 'phase2']
+                        plt.subplot(2, 2, j + 1)
+                        plt.imshow(current_im)
+                        plt.title(titles[j])
+                        plt.colorbar()
+                        plt.show() if j == im_resh.shape[0] - 1 else None
+                all_frequencies.append(im_resized)
 
-        radiations_mag, radiations_phase = all_radiations[:, :2], all_radiations[:, 2:]
-        assert np.all(radiations_mag >= 0), 'Negative values in radiation magnitude'
-        assert np.all(radiations_phase >= 0) and np.all(radiations_phase <= 360), 'Phase values out of range 0-360'
-        radiations_phase_radians = np.deg2rad(radiations_phase) - np.pi
-        radiations_mag_dB = 10 * np.log10(radiations_mag)
-        radiations = np.concatenate((radiations_mag_dB, radiations_phase_radians), axis=1)
-        saving_folder = os.path.join(Path(folder_path).parent, 'processed_data')
-        if not debug:
-            np.save(os.path.join(saving_folder, 'radiations.npy'), radiations)
-        print('Radiations saved successfully with mag in dB and phase in radians')
+            radiation_multi_frequencies = np.array(all_frequencies)
+            mag_db, phase_radians = radiation_multi_frequencies[:, :2], radiation_multi_frequencies[:, 2:]
+            mag_db_concat = mag_db.reshape(-1, mag_db.shape[2], mag_db.shape[3])
+            phase_radians_concat = phase_radians.reshape(-1, phase_radians.shape[2], phase_radians.shape[3])
+            radiations = np.concatenate((mag_db_concat, phase_radians_concat), axis=0).astype(np.float32)
+            self.assert_radiation_rules(radiations[np.newaxis])
+            if not debug:
+                saving_folder = os.path.join(self.destination_path, i)
+                os.makedirs(saving_folder, exist_ok=True)
+                np.save(os.path.join(saving_folder, 'radiation.npy'), radiations)
 
     def gamma_preprocessor(self, debug=False):
         print('Preprocessing gammas')
-        all_gammas = []
         folder_path = self.folder_path
         for i in sorted(os.listdir(folder_path)):
             print('working on antenna number:', i, 'out of:', self.num_data_points)
-            file_path = os.path.join(folder_path, i, f'{i}_S11.pickle')
+            file_path = os.path.join(folder_path, i, 'S_parameters.pickle')
             with open(file_path, 'rb') as f:
                 gamma_raw = pickle.load(f)
                 gamma_complex = gamma_raw[0]
                 gamma_mag, gamma_phase = np.abs(gamma_complex), np.angle(
                     gamma_complex)  # gamma_phase in radians already
-                assert np.all(gamma_mag >= 0), 'Negative values in gamma magnitude'
-                assert np.all(gamma_phase >= -np.pi) and np.all(
-                    gamma_phase <= np.pi), 'Phase values out of range -pi-pi'
                 gamma_mag_dB = 10 * np.log10(gamma_mag)
                 gamma = np.concatenate((gamma_mag_dB, gamma_phase))
-                all_gammas.append(gamma)
-        all_gammas = np.array(all_gammas)
-        if not debug:
-            np.save(os.path.join(Path(folder_path).parent, 'processed_data', 'gammas.npy'), all_gammas)
-            np.save(os.path.join(Path(folder_path).parent, 'processed_data', 'frequencies.npy'), gamma_raw[1])
+                self.assert_gamma_rules(gamma[np.newaxis])
+                if not debug:
+                    output_folder = os.path.join(self.destination_path, i)
+                    os.makedirs(output_folder, exist_ok=True)
+                    np.save(os.path.join(output_folder, 'gamma.npy'), gamma)
         print('Gammas saved successfully with mag in dB and phase in radians')
         pass
 
@@ -160,8 +190,6 @@ class DataPreprocessor:
         assert np.all(mag_linear >= 0), 'Negative values in radiation magnitude'
         assert np.all(phase_rad >= -np.pi - eps) and np.all(
             phase_rad <= np.pi + eps), 'Phase values out of range -pi - pi radians'
-        print('All radiation rules are satisfied!')
-        return True
 
     @staticmethod
     def assert_gamma_rules(gamma: np.ndarray):
@@ -172,8 +200,19 @@ class DataPreprocessor:
         assert np.all(mag_linear >= 0), 'Negative values in gamma magnitude'
         assert np.all(phase_rad >= -np.pi - eps) and np.all(
             phase_rad <= np.pi + eps), 'Phase values out of range -pi - pi radians'
-        print('All gamma rules are satisfied!')
-        return True
+
+    @staticmethod
+    def load_efficiency(folder):
+        efficiency_file = os.path.join(folder, 'Efficiency.pickle')
+        with open(efficiency_file, 'rb') as f:
+            efficiency = np.real(pickle.load(f))
+            return efficiency
+
+    @staticmethod
+    def find_efficiency_for_f(efficiency, freq):
+        freqs = efficiency[2, :]
+        idx = np.where(freqs == freq)[0]
+        return efficiency[0, idx]
 
 
 class PCAWrapper:
@@ -225,12 +264,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
         antenna_folder = self.antenna_folders[idx]
         antenna_name = os.path.basename(antenna_folder)
         self.load_antenna(antenna_folder)
-        ant_resized = self.resize_antenna()
-        if self.embeddings is None:
-            if self.pca_wrapper.pca is not None:
-                self.embeddings = self.pca_wrapper.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
-            else:
-                self.embeddings = ant_resized
+        self.get_embeddings()
         self.to_tensors()
         # np.random.seed(42+idx)
         # embs = np.random.rand()*np.ones(10)
@@ -238,6 +272,16 @@ class AntennaDataSet(torch.utils.data.Dataset):
         embs = self.embeddings.detach().clone()
         self.embeddings = None
         return embs, self.gam, self.rad, self.env, antenna_name
+
+    def get_embeddings(self):
+        if self.pca_wrapper.pca is not None:
+            ant_resized = self.resize_antenna()
+            if self.embeddings is None:
+                self.embeddings = self.pca_wrapper.pca.transform(ant_resized.flatten().reshape(1, -1)).flatten()
+            else:
+                self.embeddings = copy.deepcopy(ant_resized)
+        else:
+            self.embeddings = copy.deepcopy(self.ant)
 
     def to_tensors(self):
         self.embeddings = torch.tensor(self.embeddings).float()
@@ -267,7 +311,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
 
 
 class AntennaDataSetsLoader:
-    def __init__(self, dataset_path: str, batch_size: int, pca: Optional[PCA], split_ratio=None, try_cache=True):
+    def __init__(self, dataset_path: str, batch_size: int, pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
         if split_ratio is None:
             split_ratio = [0.8, 0.199, 0.001]
         self.pca_wrapper = PCAWrapper(pca)
@@ -283,8 +327,8 @@ class AntennaDataSetsLoader:
         self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
 
     def split_data(self, dataset_path, split_ratio):
-        all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]' * 5)))
-        # all_folders = [folder for folder in all_folders if folder[-5:].startswith('5')]
+        all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]*')))
+        all_folders = [folder for folder in all_folders if not os.path.basename(folder).startswith('12')]
         random.seed(42)
         random.shuffle(all_folders)
         trn_len = int(len(all_folders) * split_ratio[0])
@@ -427,19 +471,21 @@ class standard_scaler:
         self.std = np.std(data, axis=0)
 
     def forward(self, data):
-        std_mask = self.std == 0
+        assert self.mean is not None and self.std is not None, 'Scaler is not fitted'
+        std_mask = self.std < 1e-7
         std_copy = self.std.copy()
         std_copy[std_mask] = 1
         return (data - self.mean) / std_copy
 
     def inverse(self, data):
+        assert self.mean is not None and self.std is not None, 'Scaler is not fitted'
         return data * self.std + self.mean
 
 
 class ScalerManager:
-    def __init__(self, path: str):
+    def __init__(self, path: str, scaler: Optional[standard_scaler] = None):
         self.path = path
-        self.scaler = None
+        self.scaler = scaler
 
     def try_loading_from_cache(self):
         if os.path.exists(self.path):
@@ -782,50 +828,23 @@ def gen2_organize_from_npz(npz_file, output_folder):
         pass
 
 
-if __name__ == '__main__':
-    # data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs'
-    # ant_folders = [os.path.join(data_path, str(i).zfill(5)) for i in range(100)]
-    # pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-    # train_set = AntennaDataSet(ant_folders, pca)
-    # data_loader = torch.utils.data.DataLoader(train_set, batch_size=10, shuffle=True)
-    # for i, data in enumerate(data_loader):
-    #     print(data)
-    # set_plane_for_env(plane='xz',start=0,stop=15000)
-    # organize_dataset_per_antenna()
-    # env_preprocessor = DataPreprocessor(folder_path=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\data_2500x2\nits_checkpoints')
-    # env_preprocessor.environment_preprocessor(debug=False)
-    # data_processor = DataPreprocessor(folder_path=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data"
-    #                                               r"\data_15000_3envs\data_2500x2\results")
-    # data_processor.gamma_preprocessor(debug=True)
-    # data_processor.radiation_preprocessor(plot=False, debug=True)
-    # data_path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\data_10000x1\processed_data"
-    # gamma, radiation = np.load(os.path.join(data_path, 'gammas.npy')), np.load(
-    #     os.path.join(data_path, 'radiations.npy'))
-    # data_processor.assert_gamma_rules(gamma)
-    # data_processor.assert_radiation_rules(radiation)
-    # pass
-    # import matplotlib.pyplot as plt
-    # import numpy as np
-    #
-    # import matplotlib.patches as mpatches
-    #
-    # x = np.arange(0, 10, 0.005)
-    # y = np.exp(-x / 2.) * np.sin(2 * np.pi * x)
-    #
-    # fig, ax = plt.subplots()
-    # ax.plot(x, y)
-    # ax.set_xlim(0, 10)
-    # ax.set_ylim(-1, 1)
-    #
-    # plt.show()
-    run_dxf2img()
-    # gen2_organize_from_npz(
-    #     r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\results_simulator.npz',
-    #     output_folder=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\processed')
-    # DataPreprocessor(r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\fol'
-    #                  r'der_to_transfer_many_alphas\models').environment_preprocessor()
-    # gen2_gather_antennas(
-    #     output_folder=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\processed',
-    #     data_folder1=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs_backup\folder_to_transfer_many_alphas\models')
+def get_size(path):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            # skip if it is a symbolic link
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+    return total_size
 
+
+if __name__ == '__main__':
+    data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_raw'
+    destination_path = data_path.replace(os.path.basename(data_path), 'data_110k_150k_processed')
+    preprocessor = DataPreprocessor(data_path=data_path, destination_path=destination_path)
+    preprocessor.antenna_preprocessor()
+    preprocessor.environment_preprocessor()
+    preprocessor.radiation_preprocessor()
+    preprocessor.gamma_preprocessor()
     pass

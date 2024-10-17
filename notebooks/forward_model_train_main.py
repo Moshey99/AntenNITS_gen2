@@ -11,18 +11,19 @@ import pickle
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
     parser.add_argument('--batch_size', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-3, help='initial learning rate')
     parser.add_argument('--epochs', type=int, default=120)
     parser.add_argument('--gamma_schedule', type=float, default=0.95, help='gamma decay rate')
     parser.add_argument('--step_size', type=int, default=1, help='step size for gamma decay')
     parser.add_argument('--rad_range', type=list, default=[-20, 5], help='range of radiation values for scaling')
-    parser.add_argument('--geo_weight', type=float, default=1e-3, help='controls the influence of geometry loss')
-    parser.add_argument('--lamda', type=int, default=1, help='weight for radiation in gamma radiation loss')
+    parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
+    parser.add_argument('--rad_phase_fac', type=float, default=0., help='weight for phase in radiation loss')
+    parser.add_argument('--lamda', type=float, default=1., help='weight for radiation in gamma radiation loss')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints\forward.pth')
-    parser.add_argument('--patience', type=int, default=7, help='early stopping patience')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints\forward.pth')
+    parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
     parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
     return parser.parse_args()
 
@@ -42,12 +43,11 @@ if __name__ == "__main__":
     args = arg_parser()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
-    pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
-    #save_embeddings(pca, args.data_path)
-    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, pca=pca, try_cache=args.try_cache)
+    # pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
+    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, try_cache=args.try_cache)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
     model = forward_GammaRad(radiation_channels=12)
-    loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda)
+    loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda, rad_phase_fac=args.rad_phase_fac, euc_weight=0.5)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_schedule)
@@ -56,14 +56,10 @@ if __name__ == "__main__":
     patience = args.patience
     best_loss = np.inf
     train_loss = 0
-    scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
-    scaler_manager.try_loading_from_cache()
-    if scaler_manager.scaler is None:
-        print('Fitting environment scaler.')
-        envs = EnvironmentScalerLoader(antenna_dataset_loader).load_environments()
-        scaler_manager.scaler = standard_scaler()
-        scaler_manager.fit(envs)
-        scaler_manager.dump()
+    env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+    env_scaler_manager.try_loading_from_cache()
+    ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'ant_scaler.pkl'))
+    ant_scaler_manager.try_loading_from_cache()
     while keep_training:
         if epoch % 10 == 0 and epoch > 0:
             print(f'Saving model at epoch {epoch}')
@@ -73,8 +69,9 @@ if __name__ == "__main__":
         model.train()
         for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
             EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
-            embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-                scaler_manager.scaler.forward(ENV).to(device)
+            embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device),\
+                GAMMA.to(device), RADIATION.to(device), \
+                env_scaler_manager.scaler.forward(ENV).float().to(device)
             geometry = torch.cat((embeddings, env), dim=1)
             target = (gamma, radiation)
             optimizer.zero_grad()
@@ -96,8 +93,9 @@ if __name__ == "__main__":
             val_loss = 0
             for idx, sample in enumerate(antenna_dataset_loader.val_loader):
                 EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
-                embeddings, gamma, radiation, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-                    scaler_manager.scaler.forward(ENV).to(device)
+                embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+                    GAMMA.to(device), RADIATION.to(device), \
+                    env_scaler_manager.scaler.forward(ENV).float().to(device)
                 geometry = torch.cat((embeddings, env), dim=1)
                 target = (gamma, radiation)
                 gamma_pred, rad_pred = model(geometry)
