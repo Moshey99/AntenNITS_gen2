@@ -256,6 +256,14 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.try_cache = try_cache
         self.antenna_hw = (144, 200)  # self.antenna_hw = (20, 20)
         self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
+        self.shapes = None
+        self.get_shapes()
+
+    def get_shapes(self):
+        self.load_antenna(self.antenna_folders[0])
+        self.shapes = {'emb': self.embeddings.shape, 'gam': self.gam.shape, 'rad': self.rad.shape,
+                       'env': self.env.shape}
+        self.__reset_all()
 
     def __len__(self):
         return self.len
@@ -309,6 +317,9 @@ class AntennaDataSet(torch.utils.data.Dataset):
         radiation[:int(radiation.shape[0] / 2)] = np.clip(radiation[:int(radiation.shape[0] / 2)], -20, 5)
         return radiation
 
+    def __reset_all(self):
+        self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
+
 
 class AntennaDataSetsLoader:
     def __init__(self, dataset_path: str, batch_size: int, pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
@@ -328,7 +339,8 @@ class AntennaDataSetsLoader:
 
     def split_data(self, dataset_path, split_ratio):
         all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]*')))
-        all_folders = [folder for folder in all_folders if not os.path.basename(folder).startswith('12')]
+        all_folders = [folder for folder in all_folders if
+                       os.path.basename(folder).startswith('13') or os.path.basename(folder).startswith('14')]
         random.seed(42)
         random.shuffle(all_folders)
         trn_len = int(len(all_folders) * split_ratio[0])
