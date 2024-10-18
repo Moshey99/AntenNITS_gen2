@@ -69,8 +69,8 @@ class NITSPrimitive(nn.Module):
         # set start and end tensors
         assert non_conditional_dim < self.d, '{}, {}'.format(non_conditional_dim, self.d)
         self.non_conditional_dim = non_conditional_dim
-        self.register_buffer('start_val', torch.tensor(start))
-        self.register_buffer('end_val', torch.tensor(end))
+        self.register_buffer('start_val', start.clone().detach())
+        self.register_buffer('end_val', end.clone().detach())
 
     def start_(self, x):
         return self.clone_x_and_fill_conditional_dim_with(x, self.start_val)
@@ -357,8 +357,8 @@ class NITS(NITSPrimitive):
         self.softmax_temperature = softmax_temperature
         self.share_mixture_components = share_mixture_components
 
-        self.register_buffer('start', torch.tensor(start).reshape(1, 1).tile(1, d))
-        self.register_buffer('end', torch.tensor(end).reshape(1, 1).tile(1, d))
+        self.register_buffer('start', start.clone().detach().reshape(1, 1).tile(1, d))
+        self.register_buffer('end', end.clone().detach().reshape(1, 1).tile(1, d))
 
         self.nits = NITSPrimitive(arch, start, end,
                                   A_constraint=A_constraint,
