@@ -189,225 +189,231 @@ def generate_overall_stats(model, data, top_n=5):
                   variations_tmp.mean(dim=0).detach().cpu().numpy())
     return
 
+def arg_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--data_path', type=str,
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
+    parser.add_argument('-o', '--output_folder', type=str, default=None)
+    parser.add_argument('-g', '--gpu', type=str, default='')
+    parser.add_argument('-b', '--batch_size', type=int, default=20)
+    parser.add_argument('-hi', '--hidden_dim', type=int, default=128)
+    parser.add_argument('-nr', '--n_residual_blocks', type=int, default=8)
+    parser.add_argument('-n', '--patience', type=int, default=10)
+    parser.add_argument('-ga', '--gamma', type=float, default=0.9)
+    parser.add_argument('-pd', '--polyak_decay', type=float, default=0.995)
+    parser.add_argument('-a', '--nits_arch', type=list_str_to_list, default='[16,16,1]')
+    parser.add_argument('-r', '--rotate', action='store_true')
+    parser.add_argument('-dn', '--dont_normalize_inverse', type=bool, default=False)
+    parser.add_argument('-l', '--learning_rate', type=float, default=2e-4)
+    parser.add_argument('-p', '--dropout', type=float, default=-1.0)
+    parser.add_argument('-rc', '--add_residual_connections', type=bool, default=True)
+    parser.add_argument('-bm', '--bound_multiplier', type=int, default=1)
+    parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
+                        help='Weights for each step of multistep NITS')
+    parser.add_argument('--scarf', action="store_true")
+    parser.add_argument('--bounds', type=list_str_to_list, default='[-1,1]')
+    parser.add_argument('--conditional', type=bool, default=True)
+    parser.add_argument('--conditional_dim', type=int, default=512)
+    parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
+    return parser.parse_args()
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-d', '--data_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
-parser.add_argument('-o', '--output_folder', type=str, default=None)
-parser.add_argument('-g', '--gpu', type=str, default='')
-parser.add_argument('-b', '--batch_size', type=int, default=20)
-parser.add_argument('-hi', '--hidden_dim', type=int, default=128)
-parser.add_argument('-nr', '--n_residual_blocks', type=int, default=8)
-parser.add_argument('-n', '--patience', type=int, default=10)
-parser.add_argument('-ga', '--gamma', type=float, default=0.9)
-parser.add_argument('-pd', '--polyak_decay', type=float, default=0.995)
-parser.add_argument('-a', '--nits_arch', type=list_str_to_list, default='[16,16,1]')
-parser.add_argument('-r', '--rotate', action='store_true')
-parser.add_argument('-dn', '--dont_normalize_inverse', type=bool, default=False)
-parser.add_argument('-l', '--learning_rate', type=float, default=2e-4)
-parser.add_argument('-p', '--dropout', type=float, default=-1.0)
-parser.add_argument('-rc', '--add_residual_connections', type=bool, default=True)
-parser.add_argument('-bm', '--bound_multiplier', type=int, default=1)
-parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
-                    help='Weights for each step of multistep NITS')
-parser.add_argument('--scarf', action="store_true")
-parser.add_argument('--bounds', type=list_str_to_list, default='[-10,10]')
-parser.add_argument('--conditional', type=bool, default=True)
-parser.add_argument('--conditional_dim', type=int, default=512)
-parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
-args = parser.parse_args()
-output_folder = os.path.join(args.data_path,
-                             'checkpoints_inverse') if args.output_folder is None else args.output_folder
-Path(output_folder).mkdir(parents=True, exist_ok=True)
-conditional = args.conditional
-lr_grid = [2e-4]
-hidden_dim_grid = [256]
-nr_blocks_grid = [8]
-polyak_decay_grid = [0.95]
-batch_size_grid = [15]
+if __name__ == "__main__":
+    args = arg_parser()
+    output_folder = os.path.join(args.data_path,
+                                 'checkpoints_inverse') if args.output_folder is None else args.output_folder
+    Path(output_folder).mkdir(parents=True, exist_ok=True)
+    conditional = args.conditional
+    lr_grid = [2e-4]
+    hidden_dim_grid = [256]
+    nr_blocks_grid = [8]
+    polyak_decay_grid = [0.95]
+    batch_size_grid = [15]
 
-max_vals_ll = []
-lasts_train_ll = []
-model_names = []
-for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hidden_dim_grid, nr_blocks_grid,
-                                                                     polyak_decay_grid, batch_size_grid):
-    model_extra_string = f'lr_{lr}_hd_{hidden_dim}_nr_{nr_blocks}_pd_{polyak_decay}_bs_{bs}'
-    model_names.append(model_extra_string)
-    print(model_extra_string)
-    args.learning_rate = lr
-    args.hidden_dim = hidden_dim
-    args.n_residual_blocks = nr_blocks
-    args.polyak_decay = polyak_decay
-    args.batch_size = bs
-    step_weights = np.array(args.step_weights)
-    step_weights = step_weights / (np.sum(step_weights) + 1e-7)
+    max_vals_ll = []
+    lasts_train_ll = []
+    model_names = []
+    for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hidden_dim_grid, nr_blocks_grid,
+                                                                         polyak_decay_grid, batch_size_grid):
+        model_extra_string = f'lr_{lr}_hd_{hidden_dim}_nr_{nr_blocks}_pd_{polyak_decay}_bs_{bs}'
+        model_names.append(model_extra_string)
+        print(model_extra_string)
+        args.learning_rate = lr
+        args.hidden_dim = hidden_dim
+        args.n_residual_blocks = nr_blocks
+        args.polyak_decay = polyak_decay
+        args.batch_size = bs
+        step_weights = np.array(args.step_weights)
+        step_weights = step_weights / (np.sum(step_weights) + 1e-7)
 
-    if args.gpu != '':
-        devices = [torch.device('cuda:{}'.format(gpu)) for gpu in args.gpu.split(',')]
-    else:
-        devices = ['cpu']
-    device = devices[0]
+        if args.gpu != '':
+            devices = [torch.device('cuda:{}'.format(gpu)) for gpu in args.gpu.split(',')]
+        else:
+            devices = ['cpu']
+        device = devices[0]
 
-    use_batch_norm = True
-    zero_initialization = False
-    default_patience = 10
-    data_path = args.data_path
-    assert os.path.exists(data_path)
-    pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size, pca=pca, try_cache=args.try_cache)
-    print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
+        use_batch_norm = True
+        zero_initialization = False
+        default_patience = 10
+        data_path = args.data_path
+        assert os.path.exists(data_path)
+        #pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
+        antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size, try_cache=args.try_cache)
+        shapes = antenna_dataset_loader.trn_dataset.shapes
+        print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
 
-    default_dropout = 0
-    args.patience = args.patience if args.patience >= 0 else default_patience
-    args.dropout = args.dropout if args.dropout >= 0.0 else default_dropout
-    print(args)
+        default_dropout = 0
+        args.patience = args.patience if args.patience >= 0 else default_patience
+        args.dropout = args.dropout if args.dropout >= 0.0 else default_dropout
+        print(args)
 
-    d = pca.n_components
+        d = shapes['ant'][0]
 
-    max_val = args.bounds[1]  # max(data.trn.x.max(), data.val.x.max(), data.tst.x.max())
-    min_val = args.bounds[0]  # min(data.trn.x.min(), data.val.x.min(), data.tst.x.min())
-    max_val, min_val = torch.tensor(max_val).to(device).float(), torch.tensor(min_val).to(device).float()
-    max_val *= args.bound_multiplier
-    min_val *= args.bound_multiplier
+        max_val = args.bounds[1]  # max(data.trn.x.max(), data.val.x.max(), data.tst.x.max())
+        min_val = args.bounds[0]  # min(data.trn.x.min(), data.val.x.min(), data.tst.x.min())
+        max_val, min_val = torch.tensor(max_val).to(device).float(), torch.tensor(min_val).to(device).float()
+        max_val *= args.bound_multiplier
+        min_val *= args.bound_multiplier
 
-    nits_input_dim = [1]
-    nits_model = NITS(d=d, arch=nits_input_dim + args.nits_arch, start=min_val, end=max_val, monotonic_const=1e-5,
-                      A_constraint='neg_exp',
-                      final_layer_constraint='softmax',
-                      add_residual_connections=args.add_residual_connections,
-                      normalize_inverse=(not args.dont_normalize_inverse),
-                      softmax_temperature=False).to(device)
+        nits_input_dim = [1]
+        nits_model = NITS(d=d, arch=nits_input_dim + args.nits_arch, start=min_val, end=max_val, monotonic_const=1e-5,
+                          A_constraint='neg_exp',
+                          final_layer_constraint='softmax',
+                          add_residual_connections=args.add_residual_connections,
+                          normalize_inverse=(not args.dont_normalize_inverse),
+                          softmax_temperature=False).to(device)
 
-    model = Model(
-        d=d,
-        rotate=args.rotate,
-        nits_model=nits_model,
-        n_residual_blocks=args.n_residual_blocks,
-        hidden_dim=args.hidden_dim,
-        dropout_probability=args.dropout,
-        use_batch_norm=use_batch_norm,
-        zero_initialization=zero_initialization,
-        nits_input_dim=nits_input_dim,
-        conditional=conditional,
-        conditional_dim=args.conditional_dim)
+        model = Model(
+            d=d,
+            rotate=args.rotate,
+            nits_model=nits_model,
+            n_residual_blocks=args.n_residual_blocks,
+            hidden_dim=args.hidden_dim,
+            dropout_probability=args.dropout,
+            use_batch_norm=use_batch_norm,
+            zero_initialization=zero_initialization,
+            nits_input_dim=nits_input_dim,
+            conditional=conditional,
+            conditional_dim=args.conditional_dim)
 
-    shadow = Model(
-        d=d,
-        rotate=args.rotate,
-        nits_model=nits_model,
-        n_residual_blocks=args.n_residual_blocks,
-        hidden_dim=args.hidden_dim,
-        dropout_probability=args.dropout,
-        use_batch_norm=use_batch_norm,
-        zero_initialization=zero_initialization,
-        nits_input_dim=nits_input_dim,
-        conditional=conditional,
-        conditional_dim=args.conditional_dim)
+        shadow = Model(
+            d=d,
+            rotate=args.rotate,
+            nits_model=nits_model,
+            n_residual_blocks=args.n_residual_blocks,
+            hidden_dim=args.hidden_dim,
+            dropout_probability=args.dropout,
+            use_batch_norm=use_batch_norm,
+            zero_initialization=zero_initialization,
+            nits_input_dim=nits_input_dim,
+            conditional=conditional,
+            conditional_dim=args.conditional_dim)
 
-    model = EMA(model, shadow, decay=args.polyak_decay).to(device)
-    if len(devices) > 1:
-        model = nn.DataParallel(model, device_ids=[int(i) for i in args.gpu.split(',')])
+        model = EMA(model, shadow, decay=args.polyak_decay).to(device)
+        if len(devices) > 1:
+            model = nn.DataParallel(model, device_ids=[int(i) for i in args.gpu.split(',')])
 
-    # print number of parameters
-    print('number of model parameters:', sum([np.prod(p.size()) for p in model.parameters()]))
-    print_every = 1
-    optim = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=1, gamma=args.gamma)
+        # print number of parameters
+        print('number of model parameters:', sum([np.prod(p.size()) for p in model.parameters()]))
+        print_every = 1
+        optim = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+        scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=1, gamma=args.gamma)
 
-    scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
-    scaler_manager.try_loading_from_cache()
-    if scaler_manager.scaler is None:
-        raise ValueError('Scaler not found.')
+        env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+        env_scaler_manager.try_loading_from_cache()
+        ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'ant_scaler.pkl'))
+        ant_scaler_manager.try_loading_from_cache()
 
-    time_ = time.time()
-    epoch = 0
-    train_ll = 0.
-    max_val_ll = -np.inf
-    patience = args.patience
-    keep_training = True
-    start_time = time.time()
-    while keep_training:
-        print('epoch', epoch, 'time [min]', round((time.time() - start_time) / 60), 'lr', optim.param_groups[0]['lr'])
-        model.train()
-        for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-            x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-                scaler_manager.scaler.forward(ENV).to(device)
-            model.init_models_architecture(x, (gamma, rad, env)) if i == 0 else None  # initialize the model
-            # architecture, as its size is determined by the input
-            ll = model(x, (gamma, rad, env))
-            optim.zero_grad()
-            (-ll).backward()
-            train_ll += ll.detach().cpu().numpy()
-            optim.step()
-            model.update()
-        epoch += 1
-        print('current ll loss:', ll / len(x))
-        if epoch % print_every == 0:
-            # compute train loss
-            train_ll /= len(antenna_dataset_loader.trn_dataset) * print_every
-            lr = optim.param_groups[0]['lr']
+        time_ = time.time()
+        epoch = 0
+        train_ll = 0.
+        max_val_ll = -np.inf
+        patience = args.patience
+        keep_training = True
+        start_time = time.time()
+        while keep_training:
+            print('epoch', epoch, 'time [min]', round((time.time() - start_time) / 60), 'lr', optim.param_groups[0]['lr'])
+            model.train()
+            for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
+                x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device),\
+                    GAMMA.to(device), RADIATION.to(device), \
+                    env_scaler_manager.scaler.forward(ENV).float().to(device)
+                model.init_models_architecture(x, (gamma, rad, env)) if i == 0 else None  # initialize the model
+                # architecture, as its size is determined by the input
+                ll = model(x, (gamma, rad, env))
+                optim.zero_grad()
+                (-ll).backward()
+                train_ll += ll.detach().cpu().numpy()
+                optim.step()
+                model.update()
+            epoch += 1
+            print('current ll loss:', ll / len(x))
+            if epoch % print_every == 0:
+                # compute train loss
+                train_ll /= len(antenna_dataset_loader.trn_dataset) * print_every
+                lr = optim.param_groups[0]['lr']
 
-            with torch.no_grad():
-                model.eval()
-                val_ll = 0.
-                ema_val_ll = 0.
-                for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.val_loader):
-                    x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-                        scaler_manager.scaler.forward(ENV).to(device)
-                    val_ll += model.model(x, (gamma, rad, env)).detach().cpu().numpy()
-                    ema_val_ll += model(x, (gamma, rad, env)).detach().cpu().numpy()
+                with torch.no_grad():
+                    model.eval()
+                    val_ll = 0.
+                    ema_val_ll = 0.
+                    for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.val_loader):
+                        x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+                            GAMMA.to(device), RADIATION.to(device), \
+                            env_scaler_manager.scaler.forward(ENV).float().to(device)
+                        val_ll += model.model(x, (gamma, rad, env)).detach().cpu().numpy()
+                        ema_val_ll += model(x, (gamma, rad, env)).detach().cpu().numpy()
 
-                val_ll /= len(antenna_dataset_loader.val_dataset)
-                ema_val_ll /= len(antenna_dataset_loader.val_dataset)
+                    val_ll /= len(antenna_dataset_loader.val_dataset)
+                    ema_val_ll /= len(antenna_dataset_loader.val_dataset)
 
-            # early stopping
-            if ema_val_ll > max_val_ll + 1e-4:
-                patience = args.patience
-                max_val_ll = ema_val_ll
-                best_model = copy.deepcopy(model)
-            else:
-                patience -= 1
-            print('Patience = ', patience)
-            if patience <= np.ceil(args.patience / 2):
-                scheduler.step()
-            if patience == 0:
-                print("Patience reached zero. max_val_ll stayed at {:.3f} for {:d} iterations.".format(max_val_ll,
-                                                                                                       args.patience))
-                max_vals_ll.append(max_val_ll)
-                lasts_train_ll.append(train_ll)
-                keep_training = False
+                # early stopping
+                if ema_val_ll > max_val_ll + 1e-4:
+                    patience = args.patience
+                    max_val_ll = ema_val_ll
+                    best_model = copy.deepcopy(model)
+                else:
+                    patience -= 1
+                print('Patience = ', patience)
+                if patience <= np.ceil(args.patience / 2):
+                    scheduler.step()
+                if patience == 0:
+                    print("Patience reached zero. max_val_ll stayed at {:.3f} for {:d} iterations.".format(max_val_ll,
+                                                                                                           args.patience))
+                    max_vals_ll.append(max_val_ll)
+                    lasts_train_ll.append(train_ll)
+                    keep_training = False
 
 
-            test_ll = 0
-            ema_test_ll = 0
+                test_ll = 0
+                ema_test_ll = 0
 
-            fmt_str1 = 'epoch: {:3d}, time: {:3d}s, train_ll: {:.4f},'
-            fmt_str2 = ' ema_val_ll: {:.4f}, ema_test_ll: {:.4f},'
-            fmt_str3 = ' val_ll: {:.4f}, test_ll: {:.4f}, lr: {:.2e}'
+                fmt_str1 = 'epoch: {:3d}, time: {:3d}s, train_ll: {:.4f},'
+                fmt_str2 = ' ema_val_ll: {:.4f}, ema_test_ll: {:.4f},'
+                fmt_str3 = ' val_ll: {:.4f}, test_ll: {:.4f}, lr: {:.2e}'
 
-            print((fmt_str1 + fmt_str2 + fmt_str3).format(
-                epoch,
-                int(time.time() - time_),
-                train_ll,
-                ema_val_ll,
-                ema_test_ll,
-                val_ll,
-                test_ll,
-                lr))
+                print((fmt_str1 + fmt_str2 + fmt_str3).format(
+                    epoch,
+                    int(time.time() - time_),
+                    train_ll,
+                    ema_val_ll,
+                    ema_test_ll,
+                    val_ll,
+                    test_ll,
+                    lr))
 
-            time_ = time.time()
-            train_ll = 0.
+                time_ = time.time()
+                train_ll = 0.
 
-        if epoch % (print_every * 10) == 0:
-            # save best model so far
-            torch.save(best_model.state_dict(), os.path.join(output_folder, f'ANT_model_{model_extra_string}.pth'))
-            with open(os.path.join(output_folder, 'epoch.txt'), 'w') as f:
-                f.write(str(epoch))
-            print(args)
-dict_to_print = {model_extra_string: (np.round(max_val, 3), np.round(last_train, 3)) for
-                 model_extra_string, max_val, last_train in zip(model_names, max_vals_ll, lasts_train_ll)}
-min_idx_val = np.argmin(max_vals_ll)
-min_idx_train = np.argmin(lasts_train_ll)
-print(f'best model according to val set: {model_names[min_idx_val]}')
-print(f'best model according to train set: {model_names[min_idx_train]}')
-print('dict_to_print:', dict_to_print)
+            if epoch % (print_every * 10) == 0:
+                # save best model so far
+                torch.save(best_model.state_dict(), os.path.join(output_folder, f'ANT_model_{model_extra_string}.pth'))
+                with open(os.path.join(output_folder, 'epoch.txt'), 'w') as f:
+                    f.write(str(epoch))
+                print(args)
+    dict_to_print = {model_extra_string: (np.round(max_val, 3), np.round(last_train, 3)) for
+                     model_extra_string, max_val, last_train in zip(model_names, max_vals_ll, lasts_train_ll)}
+    min_idx_val = np.argmin(max_vals_ll)
+    min_idx_train = np.argmin(lasts_train_ll)
+    print(f'best model according to val set: {model_names[min_idx_val]}')
+    print(f'best model according to train set: {model_names[min_idx_train]}')
+    print('dict_to_print:', dict_to_print)
