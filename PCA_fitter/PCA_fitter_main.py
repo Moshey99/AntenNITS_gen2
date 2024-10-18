@@ -16,27 +16,14 @@ from sklearn.decomposition import PCA
 import cv2
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
-# Argument Parser
-parser = argparse.ArgumentParser()
-parser.add_argument('--data_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
-parser.add_argument('--image_size', type=tuple, nargs='+', default=(144, 200), help='Size of the Image')
-parser.add_argument('--split_ratio', type=float, default=0.999, help='Ratio to split the dataset')
-parser.add_argument('--n_comp', type=int, default=2000, help='Number of Components for PCA')
-args = parser.parse_args()
-
-image_size = args.image_size
-data_path = args.data_path
-
-all_imgs = glob.glob(os.path.join(data_path, '*', 'antenna.npy'))
-random.Random(42).shuffle(all_imgs)
-
-# Train Images
-split_ratio = args.split_ratio
-split_index = int(len(all_imgs) * split_ratio)
-train_imgs = all_imgs[:split_index]
-test_imgs = all_imgs[split_index:]
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_path', type=str,
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
+    parser.add_argument('--image_size', type=tuple, nargs='+', default=(144, 200), help='Size of the Image')
+    parser.add_argument('--split_ratio', type=float, default=0.999, help='Ratio to split the dataset')
+    parser.add_argument('--n_comp', type=int, default=2000, help='Number of Components for PCA')
+    return parser.parse_args()
 
 
 def binarize(img, nonmetal_threshold=0.5, feed_threshold=1.5):
@@ -76,6 +63,18 @@ class Imageprep(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     print(args)
+    image_size = args.image_size
+    data_path = args.data_path
+
+    all_imgs = glob.glob(os.path.join(data_path, '*', 'antenna.npy'))
+    random.Random(42).shuffle(all_imgs)
+
+    # Train Images
+    split_ratio = args.split_ratio
+    split_index = int(len(all_imgs) * split_ratio)
+    train_imgs = all_imgs[:split_index]
+    test_imgs = all_imgs[split_index:]
+
     train_set = Imageprep(train_imgs)
 
     pca_data_loader = torch.utils.data.DataLoader(train_set, batch_size=len(train_set), shuffle=True)
