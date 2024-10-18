@@ -13,15 +13,14 @@ import pandas as pd
 import torch
 import matplotlib.pyplot as plt
 import torch.nn as nn
-from pytorch_msssim import MSSSIM
+from AntennaDesign.pytorch_msssim import MSSSIM
 from sklearn.neighbors import NearestNeighbors
 from sklearn.decomposition import PCA
 import time
-import trainer
-import losses
-from models import baseline_regressor, inverse_hypernet
+import AntennaDesign.trainer
+import AntennaDesign.losses
+from AntennaDesign.models import baseline_regressor, inverse_hypernet
 import random
-import pytorch_msssim
 import glob
 import pickle
 import re
@@ -261,8 +260,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
 
     def get_shapes(self):
         self.load_antenna(self.antenna_folders[0])
-        self.shapes = {'emb': self.embeddings.shape, 'gam': self.gam.shape, 'rad': self.rad.shape,
-                       'env': self.env.shape}
+        self.shapes = {'ant': self.ant.shape, 'gam': self.gam.shape, 'rad': self.rad.shape, 'env': self.env.shape}
         self.__reset_all()
 
     def __len__(self):
