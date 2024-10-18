@@ -21,8 +21,7 @@ def arg_parser():
     parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
     parser.add_argument('--rad_phase_fac', type=float, default=0., help='weight for phase in radiation loss')
     parser.add_argument('--lamda', type=float, default=1., help='weight for radiation in gamma radiation loss')
-    parser.add_argument('--checkpoint_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints\forward.pth')
+    parser.add_argument('--checkpoint_path', type=str, default=None, help='path to save model checkpoints')
     parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
     parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
     return parser.parse_args()
@@ -54,6 +53,7 @@ if __name__ == "__main__":
     keep_training = True
     epoch = 0
     patience = args.patience
+    checkpoints_path = os.path.join(args.data_path, 'checkpoints') if args.checkpoint_path is None else args.checkpoint_path
     best_loss = np.inf
     train_loss = 0
     env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     while keep_training:
         if epoch % 10 == 0 and epoch > 0:
             print(f'Saving model at epoch {epoch}')
-            torch.save(model.state_dict(), args.checkpoint_path.replace('.pth', f'_epoch{epoch}.pth'))
+            torch.save(model.state_dict(), os.path.join(checkpoint_path, f'forward_epoch{epoch}.pth'))
 
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
@@ -102,7 +102,8 @@ if __name__ == "__main__":
                 output = (gamma_pred, rad_pred, geometry)
                 loss = loss_fn(output, target)
                 val_loss += loss.item()
-            print(f'Validation Loss: {val_loss / len(antenna_dataset_loader.val_loader)}')
+            val_loss /= len(antenna_dataset_loader.val_loader)
+            print(f'Validation Loss: {val_loss}')
             if val_loss < best_loss:
                 best_loss = val_loss
                 best_model = model
@@ -115,8 +116,8 @@ if __name__ == "__main__":
                 print('Early stopping - stayed at the same loss for too long.')
                 keep_training = False
             train_loss = 0
-    torch.save(best_model.state_dict(), args.checkpoint_path.replace('.pth', '_best_dict.pth'))
-    torch.save(best_model, args.checkpoint_path.replace('.pth', '_best_instance.pth'))
+    best_model_checkpoint_path = os.path.join(checkpoints_path, 'forward_best_dict.pth')
+    torch.save(best_model.state_dict(), best_model_checkpoint_path)
     print('Training finished.')
     print(f'Best loss: {best_loss}')
-    print(f'Best model saved at: {args.checkpoint_path}')
+    print(f'Best model saved at: {best_model_checkpoint_path}')
