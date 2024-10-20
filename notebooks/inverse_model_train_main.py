@@ -189,6 +189,7 @@ def generate_overall_stats(model, data, top_n=5):
                   variations_tmp.mean(dim=0).detach().cpu().numpy())
     return
 
+
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
@@ -216,6 +217,7 @@ def arg_parser():
     parser.add_argument('--conditional_dim', type=int, default=512)
     parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = arg_parser()
@@ -256,7 +258,7 @@ if __name__ == "__main__":
         default_patience = 10
         data_path = args.data_path
         assert os.path.exists(data_path)
-        #pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
+        # pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
         antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size, try_cache=args.try_cache)
         shapes = antenna_dataset_loader.trn_dataset.shapes
         print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
@@ -331,10 +333,11 @@ if __name__ == "__main__":
         keep_training = True
         start_time = time.time()
         while keep_training:
-            print('epoch', epoch, 'time [min]', round((time.time() - start_time) / 60), 'lr', optim.param_groups[0]['lr'])
+            print('epoch', epoch, 'time [min]', round((time.time() - start_time) / 60), 'lr',
+                  optim.param_groups[0]['lr'])
             model.train()
             for i, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-                x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device),\
+                x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                     GAMMA.to(device), RADIATION.to(device), \
                     env_scaler_manager.scaler.forward(ENV).float().to(device)
                 model.init_models_architecture(x, (gamma, rad, env)) if i == 0 else None  # initialize the model
@@ -374,7 +377,7 @@ if __name__ == "__main__":
                 else:
                     patience -= 1
                 print('Patience = ', patience)
-                if patience <= np.ceil(args.patience / 2):
+                if patience <= args.patience - 2:
                     scheduler.step()
                 if patience == 0:
                     print("Patience reached zero. max_val_ll stayed at {:.3f} for {:d} iterations.".format(max_val_ll,
@@ -382,7 +385,6 @@ if __name__ == "__main__":
                     max_vals_ll.append(max_val_ll)
                     lasts_train_ll.append(train_ll)
                     keep_training = False
-
 
                 test_ll = 0
                 ema_test_ll = 0

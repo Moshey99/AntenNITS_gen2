@@ -35,13 +35,13 @@ def list_str_to_list(s):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
 parser.add_argument('--checkpoint_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_15000_3envs\checkpoints_inverse\ANT_model_lr_0.0002_hd_256_nr_8_pd_0.975_bs_30.pth')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints_inverse\ANT_model_lr_0.0002_hd_512_nr_8_pd_0.95_bs_30.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
 parser.add_argument('-b', '--batch_size', type=int, default=30)
 parser.add_argument('-g', '--gpu', type=str, default='')
-parser.add_argument('-hi', '--hidden_dim', type=int, default=256)
+parser.add_argument('-hi', '--hidden_dim', type=int, default=512)
 parser.add_argument('-nr', '--n_residual_blocks', type=int, default=8)
 parser.add_argument('-n', '--patience', type=int, default=10)
 parser.add_argument('-ga', '--gamma', type=float, default=0.9)
@@ -55,14 +55,14 @@ parser.add_argument('-bm', '--bound_multiplier', type=int, default=1)
 parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
                     help='Weights for each step of multistep NITS')
 parser.add_argument('--scarf', action="store_true")
-parser.add_argument('--bounds', type=list_str_to_list, default='[-10,10]')
+parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
-parser.add_argument('--num_samples', type=int, default=1)
+parser.add_argument('--num_samples', type=int, default=100)
+parser.add_argument('--num_skip', type=int, default=0)
 args = parser.parse_args()
-start = time.time()
 output_folder = os.path.join(args.data_path,
-                             'checkpoints_inverse') if args.output_folder is None else args.output_folder
+                             'checkpoints_inverse', 'samples') if args.output_folder is None else args.output_folder
 Path(output_folder).mkdir(parents=True, exist_ok=True)
 conditional = args.conditional
 default_dropout = 0
@@ -85,15 +85,15 @@ device = devices[0]
 
 data_path = args.data_path
 assert os.path.exists(data_path)
-pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
-antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, pca=pca, try_cache=True)
-scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
-scaler_manager.try_loading_from_cache()
-if scaler_manager.scaler is None:
-    raise ValueError('Scaler not found.')
-print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
+# pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
+antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=True)
+shapes = antenna_dataset_loader.trn_dataset.shapes
+env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+env_scaler_manager.try_loading_from_cache()
+ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'ant_scaler.pkl'))
+ant_scaler_manager.try_loading_from_cache()
 
-d = pca.n_components
+d = shapes['ant'][0]
 
 max_val = args.bounds[1]  # max(data.trn.x.max(), data.val.x.max(), data.tst.x.max())
 min_val = args.bounds[0]  # min(data.trn.x.min(), data.val.x.min(), data.tst.x.min())
@@ -135,23 +135,27 @@ model = EMA(model, shadow, decay=args.polyak_decay).to(device)
 model.eval()
 with torch.no_grad():
     for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-        x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-            scaler_manager.scaler.forward(ENV).to(device)
+        x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+            GAMMA.to(device), RADIATION.to(device), \
+            env_scaler_manager.scaler.forward(ENV).float().to(device)
         condition = (gamma, rad, env)
         model.init_models_architecture(x, condition)
         break
 checkpoint_path = args.checkpoint_path
-print('initialized model in: ', time.time() - start, ' seconds from the start')
 model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-print('loaded model in: ', time.time() - start, ' seconds from the start')
 model.eval()
 num_samples = args.num_samples
 with torch.no_grad():
     for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-        x, gamma, rad, env = EMBEDDINGS.to(device), GAMMA.to(device), RADIATION.to(device), \
-            scaler_manager.scaler.forward(ENV).to(device)
+        if idx < args.num_skip:
+            print('skipping antenna: ', name[0])
+            continue
+        x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+            GAMMA.to(device), RADIATION.to(device), \
+            env_scaler_manager.scaler.forward(ENV).float().to(device)
         condition = (gamma, rad, env)
-        # print('preparing to sample, passed time: ', time.time() - start, ' seconds from the start')
-        # smp = model.shadow.sample(num_samples, device, condition=condition)
-        # print(f'sampled {num_samples} samples. passed time: ', time.time() - start, ' seconds from the start')
-        # np.save(os.path.join(output_folder, f'sample_{name[0]}.npy'), smp.detach().cpu().numpy())
+        print('sampling for antenna: ', name[0], end=' ')
+        start = time.time()
+        smp = model.shadow.sample(num_samples, device, condition=condition)
+        print(f'sampled {num_samples} samples in {time.time() - start} seconds.')
+        np.save(os.path.join(output_folder, f'sample_{name[0]}.npy'), smp.detach().cpu().numpy())
