@@ -8,31 +8,81 @@ import argparse
 import torch
 import os
 import pickle
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 
-def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarray) -> plt.Figure:
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
+def plot_radiation_pattern(radiation_db, ax):
+    """
+    Plots a 3D radiation pattern on a given axis.
+
+    Parameters:
+    - radiation_db: 2D numpy array with dB values
+    - ax: The axis on which to plot the 3D radiation pattern
+    """
+    # Generate theta and phi grids
+    num_theta, num_phi = radiation_db.shape
+    theta = np.linspace(0, np.pi, num_theta)  # theta goes from 0 to pi
+    phi = np.linspace(0, 2 * np.pi, num_phi)  # phi goes from 0 to 2*pi
+
+    # Create a meshgrid of theta and phi
+    phi, theta = np.meshgrid(phi, theta)
+
+    # Convert dB to linear scale
+    r = 10 ** (radiation_db / 10)
+
+    # Convert spherical coordinates to Cartesian coordinates
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
+
+    # Plot the 3D radiation pattern on the provided axis
+    ax.plot_surface(x, y, z, facecolors=plt.cm.jet(radiation_db), rstride=1, cstride=1, alpha=0.8)
+
+
+def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarray, plot_type: str = '2d') -> plt.Figure:
     gamma, rad = condition
     gamma_amp, gamma_phase = gamma[:, :gamma.shape[1] // 2], gamma[:, gamma.shape[1] // 2:]
+
+    # Create the subplots, ensuring 3D projection for 3D plots
+    fig = plt.figure(figsize=(15, 5))
+    ax1 = fig.add_subplot(141)  # 2D plot for gamma
+    ax2 = fig.add_subplot(142, projection='3d' if plot_type == '3d' else None)
+    ax3 = fig.add_subplot(143, projection='3d' if plot_type == '3d' else None)
+    ax4 = fig.add_subplot(144, projection='3d' if plot_type == '3d' else None)
+
+    # Plot gamma amplitude and phase on ax1
     ax1.plot(freqs, gamma_amp[0].cpu().detach().numpy(), 'b-')
     ax11 = ax1.twinx()
     ax11.plot(freqs, gamma_phase[0].cpu().detach().numpy(), 'r-')
-    ax2.imshow(rad[0, 0].cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
-    ax3.imshow(rad[0, 2].cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
-    ax4.imshow(rad[0, 4].cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
     ax1.set_title('gamma')
     ax1.set_ylabel('amplitude', color='b')
     ax1.set_ylim([-20, 0])
     ax11.set_ylim([-np.pi, np.pi])
     ax11.set_ylabel('phase', color='r')
-    ax2.set_title('radiation f=2.1GHz')
-    ax3.set_title('radiation f=2.4GHz')
-    ax4.set_title('radiation f=2.7GHz')
+    rad_first_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 0])**2 + radiation_mag_to_linear(rad[0, 1])**2))
+    rad_second_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 2])**2 + radiation_mag_to_linear(rad[0, 3])**2))
+    rad_third_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 4])**2 + radiation_mag_to_linear(rad[0, 5])**2))
+    # Plot radiation patterns
+    if plot_type == '2d':
+        # 2D plots using imshow
+        ax2.imshow(rad_first_freq.cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
+        ax3.imshow(rad_second_freq.cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
+        ax4.imshow(rad_third_freq.cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
+    elif plot_type == '3d':
+        # 3D plots using plot_radiation_pattern
+        plot_radiation_pattern(rad_first_freq.cpu().detach().numpy(), ax2)
+        plot_radiation_pattern(rad_second_freq.cpu().detach().numpy(), ax3)
+        plot_radiation_pattern(rad_third_freq.cpu().detach().numpy(), ax4)
+
+    # Set titles for the radiation pattern subplots
+    ax2.set_title('rad f=1.5GHz')
+    ax3.set_title('rad f=2.1GHz')
+    ax4.set_title('rad f=2.4GHz')
+
     return fig
 
 
-def produce_stats_all_dataset(gamma_stats: List[tuple], radiation_stats: List[tuple]):
+def produce_stats_all_dataset(gamma_stats: Union[List[Tuple], np.ndarray], radiation_stats: Union[List[Tuple], np.ndarray]):
     print('--' * 20)
     gamma_stats_gathered = torch.tensor(gamma_stats)
     gamma_stats_mean = torch.nanmean(gamma_stats_gathered, dim=0).numpy()
@@ -65,7 +115,7 @@ def arg_parser():
 
 if __name__ == "__main__":
     all_gamma_stats, all_radiation_stats = [], []
-    plot_GT_vs_pred = True
+    plot_GT_vs_pred = False
     args = arg_parser()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)

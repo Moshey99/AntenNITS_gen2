@@ -366,7 +366,6 @@ def create_dataloader(gamma, radiation, params_scaled, batch_size, device, inv_o
 
 
 def nearest_neighbor_loss(loss_fn, x_train, y_train, x_val, y_val, k=1):
-    strt = time.time()
     nbrs = NearestNeighbors(n_neighbors=k, algorithm='auto').fit(x_train)
     distances, indices = nbrs.kneighbors(x_val)
     cnt = len(np.where(distances < 0.1)[0])
@@ -568,6 +567,44 @@ def gamma_to_dB(gamma: torch.Tensor):
     gamma_dB = gamma.clone()
     gamma_dB[:, :int(gamma.shape[1] / 2)] = 10 * torch.log10(gamma[:, :int(gamma.shape[1] / 2)])
     return gamma_dB
+
+
+def gamma_mag_to_dB(gamma_mag: torch.Tensor):
+    gamma_mag_dB = 10 * torch.log10(gamma_mag)
+    return gamma_mag_dB
+
+
+def gamma_to_linear(gamma: torch.Tensor):
+    gamma_linear = gamma.clone()
+    gamma_linear[:, :int(gamma.shape[1] / 2)] = 10 ** (gamma[:, :int(gamma.shape[1] / 2)] / 10)
+    return gamma_linear
+
+
+def gamma_mag_to_linear(gamma_mag: torch.Tensor):
+    gamma_mag_linear = 10 ** (gamma_mag / 10)
+    return gamma_mag_linear
+
+
+def radiation_to_dB(radiation: torch.Tensor):
+    radiation_dB = radiation.clone()
+    radiation_dB[:, :int(radiation.shape[1] / 2)] = 10 * torch.log10(radiation[:, :int(radiation.shape[1] / 2)])
+    return radiation_dB
+
+
+def radiation_mag_to_dB(radiation_mag: torch.Tensor):
+    radiation_mag_dB = 10 * torch.log10(radiation_mag)
+    return radiation_mag_dB
+
+
+def radiation_to_linear(radiation: torch.Tensor):
+    radiation_linear = radiation.clone()
+    radiation_linear[:, :int(radiation.shape[1] / 2)] = 10 ** (radiation[:, :int(radiation.shape[1] / 2)] / 10)
+    return radiation_linear
+
+
+def radiation_mag_to_linear(radiation_mag: torch.Tensor):
+    radiation_mag_linear = 10 ** (radiation_mag / 10)
+    return radiation_mag_linear
 
 
 def produce_gamma_stats(GT_gamma, predicted_gamma, dataset_type='linear', to_print=True):
@@ -893,6 +930,7 @@ def check_ant_validity(ant_parameters, model_parameters):
     if np.min([ant_parameters[f'q3z0'], ant_parameters[f'w3z0']]) > 0.2: return 0
     return 1
 
+
 class data_linewidth_plot():
     def __init__(self, x, y, **kwargs):
         self.ax = kwargs.pop("ax", plt.gca())
@@ -901,9 +939,9 @@ class data_linewidth_plot():
         self.lw = 1
         self.fig.canvas.draw()
 
-        self.ppd = 72./self.fig.dpi
+        self.ppd = 72. / self.fig.dpi
         self.trans = self.ax.transData.transform
-        self.linehandle, = self.ax.plot([],[],**kwargs)
+        self.linehandle, = self.ax.plot([], [], **kwargs)
         if "label" in kwargs: kwargs.pop("label")
         self.line, = self.ax.plot(x, y, **kwargs)
         self.line.set_color(self.linehandle.get_color())
@@ -911,7 +949,7 @@ class data_linewidth_plot():
         self.cid = self.fig.canvas.mpl_connect('draw_event', self._resize)
 
     def _resize(self, event=None):
-        lw =  ((self.trans((1, self.lw_data))-self.trans((0, 0)))*self.ppd)[1]
+        lw = ((self.trans((1, self.lw_data)) - self.trans((0, 0))) * self.ppd)[1]
         if lw != self.lw:
             self.line.set_linewidth(lw)
             self.lw = lw
@@ -920,7 +958,7 @@ class data_linewidth_plot():
     def _redraw_later(self):
         self.timer = self.fig.canvas.new_timer(interval=10)
         self.timer.single_shot = True
-        self.timer.add_callback(lambda : self.fig.canvas.draw_idle())
+        self.timer.add_callback(lambda: self.fig.canvas.draw_idle())
         self.timer.start()
 
 
@@ -969,7 +1007,7 @@ def plot_antenna_figure(model_parameters, ant_parameters, alpha=1):
                         linewidth=ant_parameters['w'] + 0.1, alpha=alpha, color='r')
     plt.title('dimensions in mm')
     ax1.set_aspect('equal')
-    #plt.show()
+    # plt.show()
     return f
 
 

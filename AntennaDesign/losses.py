@@ -28,6 +28,13 @@ class CircularLoss(nn.Module):
         return loss.mean()
 
 
+# class CircularLoss(nn.Module):
+#     def forward(self, y_true, y_pred):
+#         delta_theta = torch.atan2(torch.sin(y_pred - y_true), torch.cos(y_pred - y_true))
+#         loss = torch.abs(delta_theta)
+#         return loss.mean()
+
+
 class gamma_loss(nn.Module):
     def __init__(self, delta=1.0, smoothness_weight=0):
         super(gamma_loss, self).__init__()

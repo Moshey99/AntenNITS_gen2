@@ -63,7 +63,7 @@ if __name__ == "__main__":
     while keep_training:
         if epoch % 10 == 0 and epoch > 0:
             print(f'Saving model at epoch {epoch}')
-            torch.save(model.state_dict(), os.path.join(checkpoint_path, f'forward_epoch{epoch}.pth'))
+            torch.save(model.state_dict(), os.path.join(checkpoints_path, f'EXPERIMENT_forward_epoch{epoch}.pth'))
 
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
@@ -116,7 +116,7 @@ if __name__ == "__main__":
                 print('Early stopping - stayed at the same loss for too long.')
                 keep_training = False
             train_loss = 0
-    best_model_checkpoint_path = os.path.join(checkpoints_path, 'forward_best_dict.pth')
+    best_model_checkpoint_path = os.path.join(checkpoints_path, 'EXPERIMENT_forward_best_dict.pth')
     torch.save(best_model.state_dict(), best_model_checkpoint_path)
     print('Training finished.')
     print(f'Best loss: {best_loss}')
