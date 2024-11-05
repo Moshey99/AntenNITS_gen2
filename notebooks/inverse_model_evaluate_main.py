@@ -86,7 +86,7 @@ def get_stats_for_top_k(k: int, sorting_indices: torch.Tensor, stats: tuple):
 def model_init_shape(model, data_loader: AntennaDataSetsLoader, device=torch.device("cpu")):
     with torch.no_grad():
         for idx, (EMBEDDINGS, _, _, ENV, _) in enumerate(data_loader.trn_loader):
-            embeddings, env = torch.ones_like(EMBEDDINGS).to(device), torch.ones_like(ENV).to(device)
+            embeddings, env = torch.ones_like(EMBEDDINGS).to(device), torch.ones_like(ENV[:, 0]).to(device)
             geometry = torch.cat((embeddings, env), dim=1)
             _, _ = model(geometry)
             break
@@ -102,7 +102,7 @@ def extend_to_fit_samples(num_samples: int, env: torch.Tensor, gamma: torch.Tens
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\test_processed\spectrums')
     parser.add_argument('--forward_checkpoint_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints\forward_best_dict.pth')
     parser.add_argument('-o', '--output_folder', type=str, default=None)
@@ -129,92 +129,94 @@ if __name__ == "__main__":
     model.load_state_dict(torch.load(args.forward_checkpoint_path, map_location=device))
     counted = np.zeros(2)
     with torch.no_grad():
-        k = 3
+        k = 1
         all_gamma_stats, all_radiation_stats = [], []
         plot_GT_vs_pred = True
         model.eval()
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-            if name[0] not in ['131768', '133229', '130191', '141178', '130767', '142436']:
-                print(f'skipping antenna {name[0]}')
-                continue
-            # if all([name[0] not in sample_name for sample_name in samples_names]):
+            #if all([name[0] not in sample_name for sample_name in samples_names]):
             #     # or GAMMA[:, :GAMMA.shape[1] // 2].min() > -5:
             #     print(f'skipping antenna {name[0]}')
             #     continue
-            print(f'evaluating samples for antenna {name[0]}.')
-            x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+            x, gamma, rad, envs = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), \
                 env_scaler_manager.scaler.forward(ENV).float().to(device)
-
-            env_og_repr = env_to_dict_representation(env_scaler_manager.scaler.inverse(env))[0]
-            gt_ant_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(x))[0]
-            samples = torch.tensor(np.load(os.path.join(samples_folder, f'sample_{name[0]}.npy'))).float().to(device)
-            valid_samples_indices = get_valid_indices(
-                ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples)), env_og_repr)
-            valid_samples = samples[valid_samples_indices]
-
-            num_samples = valid_samples.shape[0]
-            env_tiled = torch.tile(env, (num_samples, 1))
-            geometries = torch.cat((valid_samples, env_tiled), dim=1)
-            gamma_pred, rad_pred = model(geometries)
-            gamma_pred_dB = gamma_to_dB(gamma_pred)
-            gamma_stats = produce_gamma_stats(gamma, gamma_pred_dB, dataset_type='dB')
-            radiation_stats = produce_radiation_stats(rad, rad_pred)
-            sorting_idxs = sort_by_metric(*gamma_stats, *radiation_stats)
-            gamma_pred_dB_sorted = gamma_pred_dB[sorting_idxs]
-            rad_pred_sorted = rad_pred[sorting_idxs]
-            embeddings_sorted = valid_samples[sorting_idxs]
-            all_gamma_stats.append(get_stats_for_top_k(k, sorting_idxs, gamma_stats))
-            all_radiation_stats.append(get_stats_for_top_k(k, sorting_idxs, radiation_stats))
-            samples_sorted_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(embeddings_sorted))
-            with open(os.path.join(output_folder, 'generated', f'ant_{name[0]}_gt.pickle'), 'wb') as ant_handle:
-                pickle.dump(gt_ant_og_repr, ant_handle)
-            if plot_GT_vs_pred:
-                figs_gt, axs_gt = plt.subplots(2, 1, figsize=(5, 10))
-                fig_gt = plot_condition((gamma, rad), freqs=np.arange(gamma.shape[1] // 2), plot_type='2d')
-                img_gt = figure_to_image(fig_gt)
-                plt.close(fig_gt)
-                axs_gt[1].imshow(img_gt)
-                axs_gt[1].set_title('GT target')
-                axs_gt[1].axis('off')
-                antenna_fig = plot_antenna_figure(ant_parameters=gt_ant_og_repr, model_parameters=env_og_repr)
-                antenna_im = figure_to_image(antenna_fig)
-                plt.close(antenna_fig)
-                axs_gt[0].imshow(antenna_im)
-                axs_gt[0].set_title('GT Antenna')
-                axs_gt[0].axis('off')
-
-                fig, axs = plt.subplots(2, 3, figsize=(15, 10))
-                # save env_og_repr
-                with open(os.path.join(output_folder, 'generated', f'env_{name[0]}.pickle'), 'wb') as env_handle:
-                    pickle.dump(env_og_repr, env_handle)
-                for i in [0, 1, 2]:
-                    ant_best_og_repr = samples_sorted_og_repr[i]
-                    counted[check_ant_validity(ant_best_og_repr, env_og_repr)] += 1
-                    with open(os.path.join(output_folder, 'generated', f'ant_{name[0]}_grade_{i}.pickle'),
-                              'wb') as ant_handle:
-                        pickle.dump(ant_best_og_repr, ant_handle)
-
-                    gamma_pred_dB_best = gamma_pred_dB_sorted[i].unsqueeze(0)
-                    rad_pred_best = rad_pred_sorted[i].unsqueeze(0)
-
-                    fig_pred = plot_condition((gamma_pred_dB_best, rad_pred_best), freqs=np.arange(gamma.shape[1] // 2),
-                                              plot_type='2d')
-                    img_pred = figure_to_image(fig_pred)
-                    plt.close(fig_pred)
-                    axs[1, i].imshow(img_pred)
-                    axs[1, i].set_title(f'Generated Prediction, idx: {i}')
-                    axs[1, i].axis('off')  # Turn off axes for better visualization
-                    antenna_fig = plot_antenna_figure(ant_parameters=ant_best_og_repr,
-                                                      model_parameters=env_og_repr)
+            for i in range(envs.shape[1]):
+                sample_name = name[i][0]
+                if 'SPEC_1' not in sample_name or all([sample_name not in name for name in samples_names]):
+                    print('skipping antenna: ', sample_name)
+                    continue
+                print(f'evaluating samples for antenna {sample_name}.')
+                env = envs[:, i]
+                env_og_repr = env_to_dict_representation(env_scaler_manager.scaler.inverse(env))[0]
+                gt_ant_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(x))[0]
+                samples = torch.tensor(np.load(os.path.join(samples_folder, f'sample_{sample_name}.npy'))).float().to(device)
+                valid_samples_indices = get_valid_indices(
+                    ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples)), env_og_repr)
+                valid_samples = samples[valid_samples_indices]
+                valid_samples = valid_samples[np.random.randint(0, valid_samples.shape[0], size=500)]
+                num_samples = valid_samples.shape[0]
+                env_tiled = torch.tile(env, (num_samples, 1))
+                geometries = torch.cat((valid_samples, env_tiled), dim=1)
+                gamma_pred, rad_pred = model(geometries)
+                gamma_pred_dB = gamma_to_dB(gamma_pred)
+                gamma_stats = produce_gamma_stats(gamma, gamma_pred_dB, dataset_type='dB')
+                radiation_stats = produce_radiation_stats(rad, rad_pred)
+                sorting_idxs = sort_by_metric(*gamma_stats, *radiation_stats)
+                gamma_pred_dB_sorted = gamma_pred_dB[sorting_idxs]
+                rad_pred_sorted = rad_pred[sorting_idxs]
+                embeddings_sorted = valid_samples[sorting_idxs]
+                all_gamma_stats.append(get_stats_for_top_k(k, sorting_idxs, gamma_stats))
+                all_radiation_stats.append(get_stats_for_top_k(k, sorting_idxs, radiation_stats))
+                samples_sorted_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(embeddings_sorted))
+                with open(os.path.join(output_folder, 'generated', f'ant_{sample_name}_gt.pickle'), 'wb') as ant_handle:
+                    pickle.dump(gt_ant_og_repr, ant_handle)
+                if plot_GT_vs_pred:
+                    figs_gt, axs_gt = plt.subplots(2, 1, figsize=(5, 10))
+                    fig_gt = plot_condition((gamma, rad), freqs=np.arange(gamma.shape[1] // 2), plot_type='2d')
+                    img_gt = figure_to_image(fig_gt)
+                    plt.close(fig_gt)
+                    axs_gt[1].imshow(img_gt)
+                    axs_gt[1].set_title('GT target')
+                    axs_gt[1].axis('off')
+                    antenna_fig = plot_antenna_figure(ant_parameters=gt_ant_og_repr, model_parameters=env_og_repr)
                     antenna_im = figure_to_image(antenna_fig)
                     plt.close(antenna_fig)
-                    axs[0, i].imshow(antenna_im)
-                    axs[0, i].set_title(f'Generated Antenna, idx: {i}')
-                    axs[0, i].axis('off')
+                    axs_gt[0].imshow(antenna_im)
+                    axs_gt[0].set_title('GT Antenna')
+                    axs_gt[0].axis('off')
 
-                plt.tight_layout()
-                plt.show()
+                    fig, axs = plt.subplots(2, 3, figsize=(15, 10))
+                    # save env_og_repr
+                    with open(os.path.join(output_folder, 'generated', f'env_{sample_name}.pickle'), 'wb') as env_handle:
+                        pickle.dump(env_og_repr, env_handle)
+                    for i in [0, 1, 2]:
+                        ant_best_og_repr = samples_sorted_og_repr[i]
+                        counted[check_ant_validity(ant_best_og_repr, env_og_repr)] += 1
+                        with open(os.path.join(output_folder, 'generated', f'ant_{sample_name}_grade_{i}.pickle'),
+                                  'wb') as ant_handle:
+                            pickle.dump(ant_best_og_repr, ant_handle)
+
+                        gamma_pred_dB_best = gamma_pred_dB_sorted[i].unsqueeze(0)
+                        rad_pred_best = rad_pred_sorted[i].unsqueeze(0)
+
+                        fig_pred = plot_condition((gamma_pred_dB_best, rad_pred_best), freqs=np.arange(gamma.shape[1] // 2),
+                                                  plot_type='2d')
+                        img_pred = figure_to_image(fig_pred)
+                        plt.close(fig_pred)
+                        axs[1, i].imshow(img_pred)
+                        axs[1, i].set_title(f'Generated Prediction, idx: {i}')
+                        axs[1, i].axis('off')  # Turn off axes for better visualization
+                        antenna_fig = plot_antenna_figure(ant_parameters=ant_best_og_repr,
+                                                          model_parameters=env_og_repr)
+                        antenna_im = figure_to_image(antenna_fig)
+                        plt.close(antenna_fig)
+                        axs[0, i].imshow(antenna_im)
+                        axs[0, i].set_title(f'Generated Antenna, idx: {i}')
+                        axs[0, i].axis('off')
+
+                    plt.tight_layout()
+                    plt.show()
 
         gamma_stats_final = np.array(all_gamma_stats)
         radiation_stats_final = np.array(all_radiation_stats)

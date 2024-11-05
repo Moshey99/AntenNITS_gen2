@@ -35,7 +35,7 @@ def list_str_to_list(s):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\test_processed\spectrums')
 parser.add_argument('--checkpoint_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints_inverse\ANT_model_lr_0.0002_hd_512_nr_8_pd_0.95_bs_30.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
@@ -58,7 +58,7 @@ parser.add_argument('--scarf', action="store_true")
 parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
-parser.add_argument('--num_samples', type=int, default=100)
+parser.add_argument('--num_samples', type=int, default=1)
 parser.add_argument('--num_skip', type=int, default=0)
 args = parser.parse_args()
 output_folder = os.path.join(args.data_path,
@@ -135,10 +135,10 @@ model = EMA(model, shadow, decay=args.polyak_decay).to(device)
 model.eval()
 with torch.no_grad():
     for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-        x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+        x, gamma, rad, envs = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
             GAMMA.to(device), RADIATION.to(device), \
             env_scaler_manager.scaler.forward(ENV).float().to(device)
-        condition = (gamma, rad, env)
+        condition = (gamma, rad, envs[:, 0])
         model.init_models_architecture(x, condition)
         break
 checkpoint_path = args.checkpoint_path
@@ -150,12 +150,18 @@ with torch.no_grad():
         if idx < args.num_skip:
             print('skipping antenna: ', name[0])
             continue
-        x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+        x, gamma, rad, envs = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
             GAMMA.to(device), RADIATION.to(device), \
             env_scaler_manager.scaler.forward(ENV).float().to(device)
-        condition = (gamma, rad, env)
-        print('sampling for antenna: ', name[0], end=' ')
-        start = time.time()
-        smp = model.shadow.sample(num_samples, device, condition=condition)
-        print(f'sampled {num_samples} samples in {time.time() - start} seconds.')
-        np.save(os.path.join(output_folder, f'sample_{name[0]}.npy'), smp.detach().cpu().numpy())
+        for i in range(envs.shape[1]):
+            sample_name = name[i][0]
+            if 'SPEC_1' not in sample_name:
+                print('skipping antenna: ', sample_name)
+                continue
+            env = envs[:, i]
+            condition = (gamma, rad, env)
+            print('sampling for antenna: ', sample_name)
+            start = time.time()
+            smp = model.shadow.sample(num_samples, device, condition=condition)
+            print(f'sampled {num_samples} samples in {time.time() - start} seconds.')
+            np.save(os.path.join(output_folder, f'sample_{name[i][0]}.npy'), smp.detach().cpu().numpy())

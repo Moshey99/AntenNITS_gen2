@@ -277,7 +277,8 @@ class AntennaDataSet(torch.utils.data.Dataset):
         # embs = torch.tensor(embs).float()
         embs = self.embeddings.detach().clone()
         self.embeddings = None
-        return embs, self.gam, self.rad, self.env, antenna_name
+        antenna_full_name = [f'SPEC_{antenna_name}_ENV_{env_name}' for env_name in self.env_names]
+        return embs, self.gam, self.rad, self.env, antenna_full_name
 
     def get_embeddings(self):
         if self.pca_wrapper.pca is not None:
@@ -300,12 +301,15 @@ class AntennaDataSet(torch.utils.data.Dataset):
         return cv2.resize(self.ant, (w, h))
 
     def load_antenna(self, antenna_folder):
-        self.ant = np.load(os.path.join(antenna_folder, 'antenna.npy'))
+        self.ant = np.zeros(40) #np.load(os.path.join(antenna_folder, 'antenna.npy'))
         self.gam = downsample_gamma(np.load(os.path.join(antenna_folder, 'gamma.npy'))[np.newaxis], rate=4).squeeze()
         self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy'))[np.newaxis],
                                         rates=[4, 2]).squeeze()
         self.rad = self.__clip_radiation(self.rad)
-        self.env = np.load(os.path.join(antenna_folder, 'environment.npy'))
+        environment_folders = os.path.join(antenna_folder, '..', '..', 'environments')
+        self.env_names = sorted(os.listdir(environment_folders))
+        self.env = np.array([np.load(os.path.join(environment_folders, env_name, 'environment.npy'))
+                    for env_name in self.env_names])
         if self.try_cache and os.path.exists(os.path.join(antenna_folder, 'embeddings.npy')):
             self.embeddings = np.load(os.path.join(antenna_folder, 'embeddings.npy'))
 
@@ -322,23 +326,25 @@ class AntennaDataSet(torch.utils.data.Dataset):
 class AntennaDataSetsLoader:
     def __init__(self, dataset_path: str, batch_size: int, pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
         if split_ratio is None:
-            split_ratio = [0.8, 0.199, 0.001]
+            split_ratio = [1, 0, 0]
         self.pca_wrapper = PCAWrapper(pca)
         self.batch_size = batch_size
         self.split = split_ratio
         self.trn_folders, self.val_folders, self.tst_folders = [], [], []
         self.split_data(dataset_path, split_ratio)
         self.trn_dataset = AntennaDataSet(self.trn_folders, self.pca_wrapper, try_cache)
-        self.val_dataset = AntennaDataSet(self.val_folders, self.pca_wrapper, try_cache)
-        self.tst_dataset = AntennaDataSet(self.tst_folders, self.pca_wrapper, try_cache)
         self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=batch_size)
-        self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=batch_size)
-        self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
+        # self.val_dataset = AntennaDataSet(self.val_folders, self.pca_wrapper, try_cache)
+        # self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=batch_size)
+        # self.tst_dataset = AntennaDataSet(self.tst_folders, self.pca_wrapper, try_cache)
+        # self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
 
     def split_data(self, dataset_path, split_ratio):
-        all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]*')))
-        all_folders = [folder for folder in all_folders if
-                       os.path.basename(folder).startswith('13') or os.path.basename(folder).startswith('14')]
+        # all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]*')))
+        # all_folders = [folder for folder in all_folders if
+        #                os.path.basename(folder).startswith('13') or os.path.basename(folder).startswith('14')]
+        all_folders = [os.path.join(dataset_path, path) for path in sorted(os.listdir(dataset_path))]
+        all_folders = [folder for folder in all_folders if not os.path.isfile(folder) and 'checkpoints' not in folder]
         random.seed(42)
         random.shuffle(all_folders)
         trn_len = int(len(all_folders) * split_ratio[0])
