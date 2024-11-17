@@ -18,19 +18,7 @@ def arg_parser():
 
     return parser.parse_args()
 
-def preprocess_mat(mat):
-    dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    gamma = np.squeeze(mat['gamma'])
-    gamma = np.concatenate((np.abs(gamma), np.angle(gamma)))
-    rad = np.squeeze(mat['farfield'])[:, :, 1:, 0]
-    rad_concat = np.concatenate((np.abs(rad), np.angle(rad)), axis=2)
-    rad_concat_swapped = np.swapaxes(rad_concat, 0, 2)
-    gamma,radiation = torch.tensor(gamma).to(dev).unsqueeze(0),torch.tensor(rad_concat_swapped).to(dev).unsqueeze(0)
-    gamma_down = downsample_gamma(gamma,4).squeeze(0)
-    radiation_down = downsample_radiation(radiation, rates=[4, 2]).squeeze(0)
-    gamma_down[:gamma_down.shape[0]//2] = 10*np.log10(gamma_down[:gamma_down.shape[0]//2])
-    radiation_down[:radiation_down.shape[0]//2] = 10*np.log10(radiation_down[:radiation_down.shape[0]//2])
-    return gamma_down,radiation_down.cpu().detach().numpy()
+
 def main():
     #---------------
     args = arg_parser()
@@ -60,8 +48,7 @@ def main():
     GT_gamma = gt_spectrums
     produce_gamma_stats(gt_spectrums, predicted_spectrums, 'dB')
     prnt = inv_or_forw
-    pred_gamma_sample = pred_gamma[sample].cpu().detach().numpy()
-    pred_gamma_sample[:int(0.5 * GT_gamma.shape[1])] = 10*np.log10(pred_gamma_sample[:int(0.5 * GT_gamma.shape[1])] )
+    pred_gamma_sample = gamma_to_dB(pred_gamma[sample]).cpu().detach().numpy()
     GT_gamma_sample = GT_gamma[sample].cpu().detach().numpy()
     plt.figure()
     plt.plot(pred_gamma_sample,label='Predicted gamma of predicted geo')
