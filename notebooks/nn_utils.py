@@ -4,103 +4,77 @@ import torch
 import numpy as np
 from AntennaDesign.utils import *
 import os
-from models.forward_GammaRad import forward_GammaRad
 from forward_model_evaluate_main import plot_condition, produce_stats_all_dataset
-from inverse_model_evaluate_main import model_init_shape, arg_parser, ant_to_dict_representation, env_to_dict_representation
+from inverse_model_evaluate_main import arg_parser, ant_to_dict_representation, \
+    env_to_dict_representation, sort_by_metric
 
 if __name__ == "__main__":
     args = arg_parser().parse_args()
+    output_folder = args.output_folder if args.output_folder is not None else os.path.join(args.data_path,
+                                                                                           'checkpoints_inverse')
     device = torch.device("cpu")
     data_path = args.data_path
-    env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+    env_scaler_manager = ScalerManager(path=os.path.join(data_path, 'env_scaler.pkl'))
     env_scaler_manager.try_loading_from_cache()
-    ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'ant_scaler.pkl'))
+    ant_scaler_manager = ScalerManager(path=os.path.join(data_path, 'ant_scaler.pkl'))
     ant_scaler_manager.try_loading_from_cache()
-    model = forward_GammaRad(radiation_channels=12)
     antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=6949, try_cache=False)
-    model_init_shape(model, antenna_dataset_loader)
-    model.load_state_dict(torch.load(args.forward_checkpoint_path, map_location=device))
     with torch.no_grad():
         all_gamma_stats, all_radiation_stats = [], []
         plot_GT_vs_pred = False
-        model.eval()
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
             x_trn, gamma_trn, rad_trn, env_trn = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
-                GAMMA.to(device), RADIATION.to(device), \
-                env_scaler_manager.scaler.forward(ENV).float().to(device)
-            geometry_trn = torch.cat((x_trn, env_trn), dim=1)
-            if idx == 1:
-                break
+                GAMMA.to(device), RADIATION.to(device), ENV.to(device)
 
-        nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(geometry_trn)
-
-        for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.val_loader):
-            # if GAMMA[:, :GAMMA.shape[1] // 2].min() > -5:
-            #     print(f'skipping antenna {name[0]}')
-            #     continue
-            print(f'evaluating samples for antenna {name[0]}.')
-            x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
-                GAMMA.to(device), RADIATION.to(device), \
-                env_scaler_manager.scaler.forward(ENV).float().to(device)
-            geometry_val = torch.cat((x, env), dim=1)
-            distances, indices = nbrs.kneighbors(geometry_val)
+            env_abs_trn = torch.tensor([list(model_rel2abs(env_to_dict_representation(env_trn)[i]).values())
+                                    for i in range(env_trn.shape[0])], device=device)
             break
 
-
-        gamma_pred_dB = gamma_trn[indices].squeeze()
-        rad_pred = rad_trn[indices].squeeze()
-        ant_pred = x_trn[indices].squeeze()
-        env_pred = env_trn[indices].squeeze()
-
-
-        gamma_stats = produce_gamma_stats(gamma, gamma_pred_dB, dataset_type='dB')
-        radiation_stats = produce_radiation_stats(rad, rad_pred)
-
-        all_gamma_stats = np.array(gamma_stats).T
-        all_radiation_stats = np.array(radiation_stats).T
-        produce_stats_all_dataset(all_gamma_stats, all_radiation_stats)
-        #
-        # env_og_repr = env_to_dict_representation(env_scaler_manager.scaler.inverse(env))[0]
-        # gt_ant_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(x))[0]
-        # pred_ant_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(ant_pred))
-        # pred_env_og_repr = env_to_dict_representation(env_scaler_manager.scaler.inverse(env_pred))
-        #
-        # if plot_GT_vs_pred:
-        #     figs_gt, axs_gt = plt.subplots(2, 1, figsize=(5, 10))
-        #     fig_gt = plot_condition((gamma, rad), freqs=np.arange(gamma.shape[1] // 2), plot_type='3d')
-        #     img_gt = figure_to_image(fig_gt)
-        #     plt.close(fig_gt)
-        #     axs_gt[1].imshow(img_gt)
-        #     axs_gt[1].set_title('GT target')
-        #     axs_gt[1].axis('off')
-        #     antenna_fig = plot_antenna_figure(ant_parameters=gt_ant_og_repr, model_parameters=env_og_repr)
-        #     antenna_im = figure_to_image(antenna_fig)
-        #     plt.close(antenna_fig)
-        #     axs_gt[0].imshow(antenna_im)
-        #     axs_gt[0].set_title('GT Antenna')
-        #     axs_gt[0].axis('off')
-        #
-        #     fig, axs = plt.subplots(2, 3, figsize=(15, 10))
-        #
-        #     for i in [0, 1, 2]:
-        #         gamma_pred_dB_best = gamma_pred_dB[i].unsqueeze(0)
-        #         rad_pred_best = rad_pred[i].unsqueeze(0)
-        #
-        #         fig_pred = plot_condition((gamma_pred_dB_best, rad_pred_best), freqs=np.arange(gamma.shape[1] // 2),
-        #                                   plot_type='3d')
-        #         img_pred = figure_to_image(fig_pred)
-        #         plt.close(fig_pred)
-        #         axs[1, i].imshow(img_pred)
-        #         axs[1, i].set_title(f'Generated Prediction, idx: {i}')
-        #         axs[1, i].axis('off')  # Turn off axes for better visualization
-        #         antenna_fig = plot_antenna_figure(ant_parameters=pred_ant_og_repr[i],
-        #                                           model_parameters=env_og_repr)
-        #         antenna_im = figure_to_image(antenna_fig)
-        #         plt.close(antenna_fig)
-        #         axs[0, i].imshow(antenna_im)
-        #         axs[0, i].set_title(f' Generated Antenna, idx: {i}')
-        #         axs[0, i].axis('off')
-        #
-        #     plt.tight_layout()
-        #     plt.show()
-
+        for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.val_loader):
+            x_val, gamma_val, rad_val, env_val = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+                GAMMA.to(device), RADIATION.to(device), ENV.to(device)
+            envs_val_og_repr = env_to_dict_representation(env_val)
+            envs_abs_val = torch.tensor([list(model_rel2abs(envs_val_og_repr[i]).values())
+                                         for i in range(env_val.shape[0])], device=device)
+            break
+        n_neighbors_configs = [10]
+        for n_neighbors in n_neighbors_configs:
+            nbrs = NearestNeighbors(n_neighbors=n_neighbors, algorithm='auto').fit(env_abs_trn)
+            distances, nn_indices = nbrs.kneighbors(envs_abs_val)
+            distances, nn_indices = distances[:, 5:], nn_indices[:, 5:]
+            gamma_pred_dB = gamma_trn[nn_indices].squeeze()
+            rad_pred = rad_trn[nn_indices].squeeze()
+            ant_pred = x_trn[nn_indices].squeeze()
+            env_pred = env_trn[nn_indices].squeeze()
+            all_gamma_stats_best, all_radiation_stats_best = [], []
+            for sample_idx in range(nn_indices.shape[0]):
+                sample_name = name[sample_idx]
+                if gamma_val[sample_idx, :int(gamma_val.shape[1] // 2)].min() > -2.5:
+                    print(f'skipping antenna {sample_name}')
+                    continue
+                gamma_stats = produce_gamma_stats(gamma_val[sample_idx].unsqueeze(0), gamma_pred_dB[sample_idx], dataset_type='dB', to_print=False)
+                radiation_stats = produce_radiation_stats(rad_val[sample_idx].unsqueeze(0), rad_pred[sample_idx], to_print=False)
+                sorting_idxs = sort_by_metric(*gamma_stats, *radiation_stats)
+                best_nbr_index = sorting_idxs[3]
+                gamma_stats_best = [gamma_stats[i][best_nbr_index] for i in range(len(gamma_stats))]
+                radiation_stats_best = [radiation_stats[i][best_nbr_index] for i in range(len(radiation_stats))]
+                sample_nn_indices = nn_indices[sample_idx]
+                ant_neighbor = x_trn[sample_nn_indices[best_nbr_index]]
+                ant_neighbor_inverse = ant_scaler_manager.scaler.inverse(ant_neighbor.unsqueeze(0))
+                ant_neighbor_og_repr = ant_to_dict_representation(ant_neighbor_inverse)[0]
+                env_og_repr = envs_val_og_repr[sample_idx]
+                if check_ant_validity(ant_parameters=ant_neighbor_og_repr, model_parameters=env_og_repr):
+                    print('NN is valid for sample:', sample_name)
+                    if sample_idx < 200:
+                        with open(os.path.join(output_folder, f'nn', f'ant_{sample_name}_nn.pickle'),
+                                  'wb') as ant_handle:
+                            pickle.dump(ant_neighbor_og_repr, ant_handle)
+                        with open(os.path.join(output_folder, f'nn', f'env_{sample_name}.pickle'),
+                                  'wb') as env_handle:
+                            pickle.dump(env_og_repr, env_handle)
+                    all_gamma_stats_best.append(gamma_stats_best)
+                    all_radiation_stats_best.append(radiation_stats_best)
+                else:
+                    print('NN is invalid for sample:', sample_name, '!!!!!')
+            print(f'For n_neighbors={n_neighbors}:')
+            produce_stats_all_dataset(np.array(all_gamma_stats_best), np.array(all_radiation_stats_best))
