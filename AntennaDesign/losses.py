@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import numpy as np
 import pytorch_msssim
+from AntennaDesign.utils import *
 
 
 class multiloss(nn.Module):
@@ -144,15 +145,13 @@ class radiation_loss_dB(nn.Module):
 
 
 class GammaRad_loss(nn.Module):
-    def __init__(self, gamma_loss_fn=None, radiation_loss_fn=None, lamda=1.0, rad_phase_fac=1.0, geo_weight=1e-4, euc_weight=1e-2):
+    def __init__(self, gamma_loss_fn=None, radiation_loss_fn=None, lamda=1.0, rad_phase_fac=0.0, geo_weight=1e-4, euc_weight=1e-2):
         super(GammaRad_loss, self).__init__()
         if gamma_loss_fn is None:
-            self.gamma_loss_fn = gamma_loss_dB()
+            self.gamma_loss_fn = Euclidean_Gamma_Loss()  # gamma_loss_dB()
         if radiation_loss_fn is None:
             self.radiation_loss_fn = radiation_loss_dB(mag_loss='huber', rad_phase_factor=rad_phase_fac)
         self.lamda = lamda
-        self.geo_weight = geo_weight
-        self.euc_reg = Euclidean_GammaRad_Loss()
         self.euc_weight = euc_weight
 
     def forward(self, pred, target):
@@ -160,44 +159,59 @@ class GammaRad_loss(nn.Module):
         gamma_target, radiation_target = target
         gamma_loss = self.gamma_loss_fn(gamma_pred, gamma_target)
         radiation_loss = self.radiation_loss_fn(radiation_pred, radiation_target)
-        euc_loss = self.euc_reg(pred, target)
-        print(f'Gamma Loss: {gamma_loss}, Radiation Loss: {radiation_loss}', end=' ')
-        loss = gamma_loss + self.lamda * radiation_loss + self.geometry_loss(geo_pred) + self.euc_weight * euc_loss
+        #print(f'Gamma Loss: {gamma_loss}, Radiation Loss: {radiation_loss}')
+        loss = gamma_loss + self.lamda * radiation_loss
         return loss
 
     def geometry_loss(self, geo):
         return self.geo_weight * torch.mean(geo)
 
 
+class Euclidean_Gamma_Loss(nn.Module):
+    def __init__(self):
+        super(Euclidean_Gamma_Loss, self).__init__()
+
+    def forward(self, gamma_pred, gamma_target):
+        sep_gamma = gamma_pred.shape[1] // 2
+        gamma_pred_mag, gamma_pred_phase = gamma_pred[:, :sep_gamma], gamma_pred[:, sep_gamma:]
+        gamma_target_mag, gamma_target_phase = gamma_target[:, :sep_gamma], gamma_target[:, sep_gamma:]
+
+        gamma_pred_euc = gamma_pred_mag * torch.exp(1j * gamma_pred_phase)
+        gamma_target_mag_lin = gamma_mag_to_linear(gamma_target_mag)
+        gamma_target_euc = gamma_target_mag_lin * torch.exp(1j * gamma_target_phase)
+        gamma_loss = torch.abs(gamma_pred_euc - gamma_target_euc).mean()
+        return gamma_loss
+
+
+class Euclidean_Radiation_Loss(nn.Module):
+    def __init__(self):
+        super(Euclidean_Radiation_Loss, self).__init__()
+
+    def forward(self, radiation_pred, radiation_target):
+        sep_radiation = radiation_pred.shape[1] // 2
+        rad_pred_mag, rad_pred_phase = radiation_pred[:, :sep_radiation], radiation_pred[:, sep_radiation:]
+        rad_target_mag, rad_target_phase = radiation_target[:, :sep_radiation], radiation_target[:, sep_radiation:]
+
+        rad_pred_mag_lin = radiation_mag_to_linear(rad_pred_mag)
+        rad_target_mag_lin = radiation_mag_to_linear(rad_target_mag)
+        rad_pred_euc = rad_pred_mag_lin * torch.exp(1j * rad_pred_phase)
+        rad_target_euc = rad_target_mag_lin * torch.exp(1j * rad_target_phase)
+        rad_loss = torch.abs(rad_pred_euc - rad_target_euc).mean()
+        return rad_loss
+
+
 class Euclidean_GammaRad_Loss(nn.Module):
     def __init__(self, lamda=1.):
         super(Euclidean_GammaRad_Loss, self).__init__()
         self.lamda = lamda
+        self.gamma_loss = Euclidean_Gamma_Loss()
+        self.rad_loss = Euclidean_Radiation_Loss()
 
     def forward(self, pred, target):
         gamma_pred, radiation_pred, geo_pred = pred
         gamma_target, radiation_target = target
+        gamma_loss = self.gamma_loss(gamma_pred, gamma_target)
+        radiation_loss = self.rad_loss(radiation_pred, radiation_target)
+        loss = gamma_loss + self.lamda * radiation_loss
+        return loss
 
-        rad_pred_mag, rad_pred_phase = radiation_pred[:, :radiation_pred.shape[1] // 2], radiation_pred[:,
-                                                                                         radiation_pred.shape[1] // 2:]
-        rad_target_mag, rad_target_phase = radiation_target[:, :radiation_target.shape[1] // 2], radiation_target[:,
-                                                                                                 radiation_target.shape[
-                                                                                                     1] // 2:]
-        rad_pred_mag_lin = 10 ** (rad_pred_mag / 10)
-        rad_target_mag_lin = 10 ** (rad_target_mag / 10)
-        rad_pred_euc = rad_pred_mag_lin * torch.exp(1j * rad_pred_phase)
-        rad_target_euc = rad_target_mag_lin * torch.exp(1j * rad_target_phase)
-        rad_loss = torch.abs(rad_pred_euc - rad_target_euc).mean()
-
-        gamma_pred_mag, gamma_pred_phase = gamma_pred[:, :gamma_pred.shape[1] // 2], gamma_pred[:,
-                                                                                     gamma_pred.shape[1] // 2:]
-        gamma_target_mag, gamma_target_phase = gamma_target[:, :gamma_target.shape[1] // 2], gamma_target[:,
-                                                                                             gamma_target.shape[
-                                                                                                 1] // 2:]
-        gamma_pred_euc = gamma_pred_mag * torch.exp(1j * gamma_pred_phase)
-        gamma_target_mag_lin = 10 ** (gamma_target_mag / 10)
-        gamma_target_euc = gamma_target_mag_lin * torch.exp(1j * gamma_target_phase)
-        gamma_loss = torch.abs(gamma_pred_euc - gamma_target_euc).mean()
-        print(f'EUC Gamma Loss: {gamma_loss}, EUC Radiation Loss: {rad_loss}')
-        total_loss = gamma_loss + self.lamda * rad_loss
-        return total_loss

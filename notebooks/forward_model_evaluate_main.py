@@ -1,5 +1,3 @@
-import matplotlib.pyplot as plt
-
 from models.forward_GammaRad import forward_GammaRad
 from losses import GammaRad_loss
 from AntennaDesign.utils import *
@@ -7,36 +5,7 @@ from AntennaDesign.utils import *
 import argparse
 import torch
 import os
-import pickle
-from typing import Tuple, List, Union
-
-
-def plot_radiation_pattern(radiation_db, ax):
-    """
-    Plots a 3D radiation pattern on a given axis.
-
-    Parameters:
-    - radiation_db: 2D numpy array with dB values
-    - ax: The axis on which to plot the 3D radiation pattern
-    """
-    # Generate theta and phi grids
-    num_theta, num_phi = radiation_db.shape
-    theta = np.linspace(0, np.pi, num_theta)  # theta goes from 0 to pi
-    phi = np.linspace(0, 2 * np.pi, num_phi)  # phi goes from 0 to 2*pi
-
-    # Create a meshgrid of theta and phi
-    phi, theta = np.meshgrid(phi, theta)
-
-    # Convert dB to linear scale
-    r = 10 ** (radiation_db / 10)
-
-    # Convert spherical coordinates to Cartesian coordinates
-    x = r * np.sin(theta) * np.cos(phi)
-    y = r * np.sin(theta) * np.sin(phi)
-    z = r * np.cos(theta)
-
-    # Plot the 3D radiation pattern on the provided axis
-    ax.plot_surface(x, y, z, facecolors=plt.cm.jet(radiation_db), rstride=1, cstride=1, alpha=0.8)
+from typing import Tuple
 
 
 def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarray, plot_type: str = '2d') -> plt.Figure:
@@ -65,14 +34,9 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarr
     # Plot radiation patterns
     if plot_type == '2d':
         # 2D plots using imshow
-        ax2.imshow(rad_first_freq.cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
-        ax3.imshow(rad_second_freq.cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
-        ax4.imshow(rad_third_freq.cpu().detach().numpy(), vmin=-20, vmax=5, cmap='jet')
-    elif plot_type == '3d':
-        # 3D plots using plot_radiation_pattern
-        plot_radiation_pattern(rad_first_freq.cpu().detach().numpy(), ax2)
-        plot_radiation_pattern(rad_second_freq.cpu().detach().numpy(), ax3)
-        plot_radiation_pattern(rad_third_freq.cpu().detach().numpy(), ax4)
+        ax2.imshow(rad_first_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
+        ax3.imshow(rad_second_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
+        ax4.imshow(rad_third_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
 
     # Set titles for the radiation pattern subplots
     ax2.set_title('rad f=1.5GHz')
@@ -82,49 +46,31 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarr
     return fig
 
 
-def produce_stats_all_dataset(gamma_stats: Union[List[Tuple], np.ndarray], radiation_stats: Union[List[Tuple], np.ndarray]):
-    print('--' * 20)
-    gamma_stats_gathered = torch.tensor(gamma_stats)
-    gamma_stats_mean = torch.nanmean(gamma_stats_gathered, dim=0).numpy()
-    assert len(gamma_stats_mean) == 4, 'gamma stats mean should have 4 elements' \
-                                       ' (avg mag, max mag, avg phase, max phase)'
-    metrics_gamma_keys = [x + ' diff' for x in ['avg mag', 'max mag', 'avg phase', 'max phase']]
-    stats_dict_gamma = dict(zip(metrics_gamma_keys, gamma_stats_mean))
-    print(f'GAMMA STATS, averaged over entire dataset: {stats_dict_gamma}')
-    radiation_stats_gathered = torch.tensor(radiation_stats)
-    radiation_stats_mean = torch.nanmean(radiation_stats_gathered, dim=0).numpy()
-    assert len(radiation_stats_mean) == 4, 'radiation stats mean should have 4 elements' \
-                                           ' (avg mag, max mag, avg phase, msssim)'
-    metrics_rad_keys = [x + ' diff' for x in ['avg mag', 'max mag', 'avg phase', 'msssim']]
-    stats_dict_rad = dict(zip(metrics_rad_keys, radiation_stats_mean))
-    print(f'RADIATION STATS, averaged over entire dataset: {stats_dict_rad}')
-    print('--' * 20)
-    pass
-
-
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
-    parser.add_argument('--rad_range', type=list, default=[-20, 5], help='range of radiation values for scaling')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+    parser.add_argument('--rad_range', type=list, default=[-10, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints\forward_best_dict.pth")
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth")
+    parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     all_gamma_stats, all_radiation_stats = [], []
-    plot_GT_vs_pred = False
+    plot_GT_vs_pred = True
     args = arg_parser()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
     # pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
-    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=1, try_cache=True)
+    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=1)
     model = forward_GammaRad(radiation_channels=12)
-    env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+    scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
+    env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
     env_scaler_manager.try_loading_from_cache()
-    ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'ant_scaler.pkl'))
+    ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'ant_{scaler_name}.pkl'))
     ant_scaler_manager.try_loading_from_cache()
     for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
         if idx == 1:
@@ -142,7 +88,7 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         model.eval()
-        for idx, sample in enumerate(antenna_dataset_loader.val_loader):
+        for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
             EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
             embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), \

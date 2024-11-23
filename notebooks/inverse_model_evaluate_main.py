@@ -1,42 +1,9 @@
-import os
 from io import BytesIO
 import argparse
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
 from models.forward_GammaRad import forward_GammaRad
-
+from utils import *
 from AntennaDesign.utils import *
-from forward_model_evaluate_main import plot_condition, produce_stats_all_dataset
-
-EXAMPLE_FOLDER = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_raw\133008'
-
-
-def ant_to_dict_representation(ant: torch.Tensor):
-    ant_path = os.path.join(EXAMPLE_FOLDER, 'ant_parameters.pickle')
-    with open(ant_path, 'rb') as f:
-        example = pickle.load(f)
-    all_ant_dicts = []
-    ant = ant.clone().detach().cpu().numpy()
-    for i in range(ant.shape[0]):
-        ant_i = np.round(ant[i], 2)
-        ant_i_dict = {key: val for key, val in zip(example.keys(), ant_i)}
-        all_ant_dicts.append(ant_i_dict)
-    return np.array(all_ant_dicts)
-
-
-def env_to_dict_representation(env: torch.Tensor):
-    env_path = os.path.join(EXAMPLE_FOLDER, 'model_parameters.pickle')
-    with open(env_path, 'rb') as f:
-        example = pickle.load(f)
-    all_env_dicts = []
-    env = env.clone().detach().cpu().numpy()
-    for i in range(env.shape[0]):
-        env_i = np.round(np.append([3], env[i]), 2)
-
-        env_i_dict = {key: val for key, val in zip(example.keys(), env_i)}
-        all_env_dicts.append(env_i_dict)
-    return np.array(all_env_dicts)
+from forward_model_evaluate_main import plot_condition
 
 
 def get_valid_indices(antennas: np.ndarray, environment: dict) -> np.ndarray:
@@ -102,15 +69,16 @@ def extend_to_fit_samples(num_samples: int, env: torch.Tensor, gamma: torch.Tens
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
     parser.add_argument('--forward_checkpoint_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints\forward_best_dict.pth')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth')
     parser.add_argument('-o', '--output_folder', type=str, default=None)
     return parser
 
 
 if __name__ == "__main__":
     args = arg_parser().parse_args()
+    args.repr_mode = 'abs'
     device = torch.device("cpu")
     data_path = args.data_path
     output_folder = args.output_folder if args.output_folder is not None else os.path.join(args.data_path,
@@ -120,37 +88,44 @@ if __name__ == "__main__":
     samples_names = os.listdir(samples_folder)
     # pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
     antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=False)
-    env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+    scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
+    env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
     env_scaler_manager.try_loading_from_cache()
-    ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'ant_scaler.pkl'))
+    ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'ant_{scaler_name}.pkl'))
     ant_scaler_manager.try_loading_from_cache()
     model = forward_GammaRad(radiation_channels=12)
     model_init_shape(model, antenna_dataset_loader)
     model.load_state_dict(torch.load(args.forward_checkpoint_path, map_location=device))
     counted = np.zeros(2)
     with torch.no_grad():
-        k = 3
+        k = 1
         all_gamma_stats, all_radiation_stats = [], []
         plot_GT_vs_pred = True
         model.eval()
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
-            if name[0] not in ['131768', '133229', '130191', '141178', '130767', '142436']:
+            if all([name[0] not in sample_name for sample_name in samples_names]) \
+                    or GAMMA[:, :GAMMA.shape[1] // 2].min() > -5:
                 print(f'skipping antenna {name[0]}')
                 continue
-            # if all([name[0] not in sample_name for sample_name in samples_names]):
-            #     # or GAMMA[:, :GAMMA.shape[1] // 2].min() > -5:
-            #     print(f'skipping antenna {name[0]}')
-            #     continue
             print(f'evaluating samples for antenna {name[0]}.')
             x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), \
                 env_scaler_manager.scaler.forward(ENV).float().to(device)
 
-            env_og_repr = env_to_dict_representation(env_scaler_manager.scaler.inverse(env))[0]
-            gt_ant_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(x))[0]
             samples = torch.tensor(np.load(os.path.join(samples_folder, f'sample_{name[0]}.npy'))).float().to(device)
-            valid_samples_indices = get_valid_indices(
-                ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples)), env_og_repr)
+
+            env_og_repr = env_to_dict_representation(
+                torch.tensor(np.load(os.path.join(data_path, name[0], 'environment.npy'))[np.newaxis]))[0]
+            gt_ant_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(x))[0]
+            samples_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples))
+            assert args.repr_mode == 'abs',\
+                'Only absolute representation is supported for now. rel mode is not supported.'
+            if args.repr_mode == 'abs':
+                #making sure the representation is relative
+                gt_ant_og_repr = ant_abs2rel(gt_ant_og_repr, env_og_repr)
+                samples_og_repr = [ant_abs2rel(ant, env_og_repr) for ant in samples_og_repr]
+
+            valid_samples_indices = get_valid_indices(samples_og_repr, env_og_repr)[:500]
             valid_samples = samples[valid_samples_indices]
 
             num_samples = valid_samples.shape[0]
@@ -158,16 +133,22 @@ if __name__ == "__main__":
             geometries = torch.cat((valid_samples, env_tiled), dim=1)
             gamma_pred, rad_pred = model(geometries)
             gamma_pred_dB = gamma_to_dB(gamma_pred)
-            gamma_stats = produce_gamma_stats(gamma, gamma_pred_dB, dataset_type='dB')
-            radiation_stats = produce_radiation_stats(rad, rad_pred)
+            gamma_stats = produce_gamma_stats(gamma, gamma_pred_dB, dataset_type='dB', to_print=False)
+            radiation_stats = produce_radiation_stats(rad, rad_pred, to_print=False)
             sorting_idxs = sort_by_metric(*gamma_stats, *radiation_stats)
             gamma_pred_dB_sorted = gamma_pred_dB[sorting_idxs]
             rad_pred_sorted = rad_pred[sorting_idxs]
-            embeddings_sorted = valid_samples[sorting_idxs]
-            all_gamma_stats.append(get_stats_for_top_k(k, sorting_idxs, gamma_stats))
-            all_radiation_stats.append(get_stats_for_top_k(k, sorting_idxs, radiation_stats))
-            samples_sorted_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(embeddings_sorted))
-            with open(os.path.join(output_folder, 'generated', f'ant_{name[0]}_gt.pickle'), 'wb') as ant_handle:
+            samples_sorted = valid_samples[sorting_idxs]
+            top_k_gamma_stats = get_stats_for_top_k(k, sorting_idxs, gamma_stats)
+            top_k_radiation_stats = get_stats_for_top_k(k, sorting_idxs, radiation_stats)
+            print(f'For antenna {name[0]}: \n',f'gamma top {k} stats:', top_k_gamma_stats,
+                  f'\nradiation top {k} stats', top_k_radiation_stats)
+            all_gamma_stats.append(top_k_gamma_stats)
+            all_radiation_stats.append(top_k_radiation_stats)
+            samples_sorted_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples_sorted))
+            if args.repr_mode == 'abs':
+                samples_sorted_og_repr = [ant_abs2rel(ant, env_og_repr) for ant in samples_sorted_og_repr]
+            with open(os.path.join(output_folder, f'generated_top_1', f'ant_{name[0]}_gt.pickle'), 'wb') as ant_handle:
                 pickle.dump(gt_ant_og_repr, ant_handle)
             if plot_GT_vs_pred:
                 figs_gt, axs_gt = plt.subplots(2, 1, figsize=(5, 10))
@@ -186,12 +167,12 @@ if __name__ == "__main__":
 
                 fig, axs = plt.subplots(2, 3, figsize=(15, 10))
                 # save env_og_repr
-                with open(os.path.join(output_folder, 'generated', f'env_{name[0]}.pickle'), 'wb') as env_handle:
+                with open(os.path.join(output_folder, 'generated_top_1', f'env_{name[0]}.pickle'), 'wb') as env_handle:
                     pickle.dump(env_og_repr, env_handle)
                 for i in [0, 1, 2]:
                     ant_best_og_repr = samples_sorted_og_repr[i]
                     counted[check_ant_validity(ant_best_og_repr, env_og_repr)] += 1
-                    with open(os.path.join(output_folder, 'generated', f'ant_{name[0]}_grade_{i}.pickle'),
+                    with open(os.path.join(output_folder, 'generated_top_1', f'ant_{name[0]}_grade_{i}.pickle'),
                               'wb') as ant_handle:
                         pickle.dump(ant_best_og_repr, ant_handle)
 
@@ -214,7 +195,7 @@ if __name__ == "__main__":
                     axs[0, i].axis('off')
 
                 plt.tight_layout()
-                plt.show()
+                #plt.show(block=False)
 
         gamma_stats_final = np.array(all_gamma_stats)
         radiation_stats_final = np.array(all_radiation_stats)

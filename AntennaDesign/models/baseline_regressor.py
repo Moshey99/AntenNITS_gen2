@@ -84,7 +84,7 @@ class small_deeper_baseline_forward_model(nn.Module):
         self.elu = nn.ELU()
         self.sigmoid = nn.Sigmoid()
         self.dropout = nn.Dropout(p=p_dropout)
-        self.eps = 1e-2
+        self.eps = 1e-1
 
     def forward(self, input):  # input is the geometric parameters
         if self.input_layer is None:

@@ -196,8 +196,8 @@ def arg_parser():
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
     parser.add_argument('-o', '--output_folder', type=str, default=None)
     parser.add_argument('-g', '--gpu', type=str, default='')
-    parser.add_argument('-b', '--batch_size', type=int, default=20)
-    parser.add_argument('-hi', '--hidden_dim', type=int, default=128)
+    parser.add_argument('-b', '--batch_size', type=int, default=12)
+    parser.add_argument('-hi', '--hidden_dim', type=int, default=512)
     parser.add_argument('-nr', '--n_residual_blocks', type=int, default=8)
     parser.add_argument('-n', '--patience', type=int, default=10)
     parser.add_argument('-ga', '--gamma', type=float, default=0.9)
@@ -212,10 +212,11 @@ def arg_parser():
     parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
                         help='Weights for each step of multistep NITS')
     parser.add_argument('--scarf', action="store_true")
-    parser.add_argument('--bounds', type=list_str_to_list, default='[-1,1]')
+    parser.add_argument('--bounds', type=list_str_to_list, default='[-4,4]')
     parser.add_argument('--conditional', type=bool, default=True)
     parser.add_argument('--conditional_dim', type=int, default=512)
     parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
+    parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     return parser.parse_args()
 
 
@@ -225,11 +226,11 @@ if __name__ == "__main__":
                                  'checkpoints_inverse') if args.output_folder is None else args.output_folder
     Path(output_folder).mkdir(parents=True, exist_ok=True)
     conditional = args.conditional
-    lr_grid = [2e-4]
-    hidden_dim_grid = [256]
-    nr_blocks_grid = [8]
-    polyak_decay_grid = [0.95]
-    batch_size_grid = [15]
+    lr_grid = [args.learning_rate]
+    hidden_dim_grid = [args.hidden_dim]
+    nr_blocks_grid = [args.n_residual_blocks]
+    polyak_decay_grid = [args.polyak_decay]
+    batch_size_grid = [args.batch_size]
 
     max_vals_ll = []
     lasts_train_ll = []
@@ -320,9 +321,10 @@ if __name__ == "__main__":
         optim = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
         scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=1, gamma=args.gamma)
 
-        env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+        scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
+        env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
         env_scaler_manager.try_loading_from_cache()
-        ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'ant_scaler.pkl'))
+        ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'ant_{scaler_name}.pkl'))
         ant_scaler_manager.try_loading_from_cache()
 
         time_ = time.time()

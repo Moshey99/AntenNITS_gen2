@@ -4,9 +4,8 @@ import torch
 import numpy as np
 from AntennaDesign.utils import *
 import os
-from forward_model_evaluate_main import plot_condition, produce_stats_all_dataset
-from inverse_model_evaluate_main import arg_parser, ant_to_dict_representation, \
-    env_to_dict_representation, sort_by_metric
+from forward_model_evaluate_main import plot_condition
+from inverse_model_evaluate_main import arg_parser, sort_by_metric
 
 if __name__ == "__main__":
     args = arg_parser().parse_args()

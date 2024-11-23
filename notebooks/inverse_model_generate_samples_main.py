@@ -35,9 +35,9 @@ def list_str_to_list(s):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
 parser.add_argument('--checkpoint_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed\checkpoints_inverse\ANT_model_lr_0.0002_hd_512_nr_8_pd_0.95_bs_30.pth')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints_inverse\ANT_model_lr_0.0002_hd_512_nr_8_pd_0.995_bs_12.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
 parser.add_argument('-b', '--batch_size', type=int, default=30)
 parser.add_argument('-g', '--gpu', type=str, default='')
@@ -55,9 +55,10 @@ parser.add_argument('-bm', '--bound_multiplier', type=int, default=1)
 parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
                     help='Weights for each step of multistep NITS')
 parser.add_argument('--scarf', action="store_true")
-parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]')
+parser.add_argument('--bounds', type=list_str_to_list, default='[-4,4]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
+parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
 parser.add_argument('--num_samples', type=int, default=100)
 parser.add_argument('--num_skip', type=int, default=0)
 args = parser.parse_args()
@@ -72,8 +73,7 @@ print(args)
 
 max_vals_ll = []
 lasts_train_ll = []
-model_extra_string = f'lr_{args.learning_rate}_hd_{args.hidden_dim}_nr_{args.n_residual_blocks}_pd_{args.polyak_decay}_bs_{args.batch_size}'
-print(model_extra_string)
+
 step_weights = np.array(args.step_weights)
 step_weights = step_weights / (np.sum(step_weights) + 1e-7)
 
@@ -85,12 +85,12 @@ device = devices[0]
 
 data_path = args.data_path
 assert os.path.exists(data_path)
-# pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
 antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=True)
 shapes = antenna_dataset_loader.trn_dataset.shapes
-env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'env_scaler.pkl'))
+scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
+env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
 env_scaler_manager.try_loading_from_cache()
-ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, 'ant_scaler.pkl'))
+ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'ant_{scaler_name}.pkl'))
 ant_scaler_manager.try_loading_from_cache()
 
 d = shapes['ant'][0]

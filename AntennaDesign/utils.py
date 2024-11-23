@@ -1,7 +1,8 @@
 import copy
 import shutil
-from typing import Union, Optional
+from typing import Union, Optional, List, Tuple
 import cv2
+import numpy
 import scipy.io as sio
 from scipy.ndimage import zoom
 from os import listdir
@@ -257,13 +258,16 @@ class PCAWrapper:
 
 
 class AntennaDataSet(torch.utils.data.Dataset):
-    def __init__(self, antenna_folders: list[str], pca_wrapper: PCAWrapper, try_cache: bool):
+    def __init__(self, antenna_folders: list[str], repr_mode: str, pca_wrapper: PCAWrapper, try_cache: bool):
+        assert repr_mode in ['abs', 'rel', 'both'], 'Invalid dataset representation mode'
+        self.repr_mode = repr_mode
         self.antenna_folders = antenna_folders
         self.len = len(antenna_folders)
         self.pca_wrapper = pca_wrapper
         self.try_cache = try_cache
         self.antenna_hw = (144, 200)  # self.antenna_hw = (20, 20)
         self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
+        self.ant_abs, self.env_abs = None, None
         self.shapes = None
         self.get_shapes()
 
@@ -281,12 +285,14 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.load_antenna(antenna_folder)
         self.get_embeddings()
         self.to_tensors()
-        # np.random.seed(42+idx)
-        # embs = np.random.rand()*np.ones(10)
-        # embs = torch.tensor(embs).float()
         embs = self.embeddings.detach().clone()
         self.embeddings = None
-        return embs, self.gam, self.rad, self.env, antenna_name
+        if self.repr_mode == 'abs':
+            return self.ant_abs, self.gam, self.rad, self.env_abs, antenna_name
+        elif self.repr_mode == 'rel':
+            return embs, self.gam, self.rad, self.env, antenna_name
+        else:  # both
+            return embs, self.ant_abs, self.gam, self.rad, self.env, self.env_abs, antenna_name
 
     def get_embeddings(self):
         if self.pca_wrapper.pca is not None:
@@ -303,6 +309,8 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.gam = torch.tensor(self.gam).float()
         self.rad = torch.tensor(self.rad).float()
         self.env = torch.tensor(self.env).float()
+        self.env_abs = torch.tensor(self.env_abs).float()
+        self.ant_abs = torch.tensor(self.ant_abs).float()
 
     def resize_antenna(self):
         h, w = self.antenna_hw
@@ -314,40 +322,65 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy'))[np.newaxis],
                                         rates=[4, 2]).squeeze()
         self.rad = self.clip_radiation(self.rad)
+        self.gam = self.clip_gamma(self.gam)
         self.env = np.load(os.path.join(antenna_folder, 'environment.npy'))
+        self.ant_abs = self.transform_ant_to_abs(self.ant, self.env)
+        self.env_abs = self.transform_env_to_abs(self.env)
         if self.try_cache and os.path.exists(os.path.join(antenna_folder, 'embeddings.npy')):
             self.embeddings = np.load(os.path.join(antenna_folder, 'embeddings.npy'))
 
     @staticmethod
+    def transform_ant_to_abs(ant: np.ndarray, env: np.ndarray) -> np.ndarray:
+        ant_rel_og_repr = ant_to_dict_representation(torch.tensor(ant[np.newaxis]))[0]
+        env_og_repr = env_to_dict_representation(torch.tensor(env[np.newaxis]))[0]
+        ant_abs_og_repr = ant_rel2abs(ant_rel_og_repr, env_og_repr)
+        ant_abs = np.array(list(ant_abs_og_repr.values()))
+        return ant_abs
+
+    @staticmethod
+    def transform_env_to_abs(env: np.ndarray) -> np.ndarray:
+        env_og_repr = env_to_dict_representation(torch.tensor(env[np.newaxis]))[0]
+        env_abs_og_repr = model_rel2abs(env_og_repr)
+        env_abs = np.array(list(env_abs_og_repr.values()))
+        return env_abs
+
+    @staticmethod
     def clip_radiation(radiation: np.ndarray):
         assert len(radiation.shape) == 3, 'Radiation shape is not 3D (channels, h, w)'
-        radiation[:int(radiation.shape[0] / 2)] = np.clip(radiation[:int(radiation.shape[0] / 2)], -20, 5)
+        sep_radiation = int(radiation.shape[0] / 2)
+        radiation[:sep_radiation] = np.clip(radiation[:sep_radiation], -10, 5)
         return radiation
+
+    @staticmethod
+    def clip_gamma(gamma: np.ndarray):
+        assert len(gamma.shape) == 1
+        sep_gamma = int(gamma.shape[0] / 2)
+        gamma[:sep_gamma] = np.clip(gamma[:sep_gamma], -20, 1e-9)
+        return gamma
 
     def __reset_all(self):
         self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
 
 
 class AntennaDataSetsLoader:
-    def __init__(self, dataset_path: str, batch_size: int, pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
+    def __init__(self, dataset_path: str, batch_size: int = None, repr_mode: str = 'abs',
+                 pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
         if split_ratio is None:
-            split_ratio = [0.8, 0.199, 0.001]
+            split_ratio = [0.8, 0.19, 0.01]  # [trn, val, tst]
         self.pca_wrapper = PCAWrapper(pca)
-        self.batch_size = batch_size
         self.split = split_ratio
         self.trn_folders, self.val_folders, self.tst_folders = [], [], []
         self.split_data(dataset_path, split_ratio)
-        self.trn_dataset = AntennaDataSet(self.trn_folders, self.pca_wrapper, try_cache)
-        self.val_dataset = AntennaDataSet(self.val_folders, self.pca_wrapper, try_cache)
-        self.tst_dataset = AntennaDataSet(self.tst_folders, self.pca_wrapper, try_cache)
-        self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=batch_size)
-        self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=batch_size)
-        self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=batch_size)
+        self.batch_size = batch_size if batch_size is not None else len(self.trn_folders)
+        self.trn_dataset = AntennaDataSet(self.trn_folders, repr_mode, self.pca_wrapper, try_cache)
+        self.val_dataset = AntennaDataSet(self.val_folders, repr_mode, self.pca_wrapper, try_cache)
+        self.tst_dataset = AntennaDataSet(self.tst_folders, repr_mode, self.pca_wrapper, try_cache)
+        self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=self.batch_size)
+        self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size)
+        self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=self.batch_size)
 
     def split_data(self, dataset_path, split_ratio):
         all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]*')))
-        all_folders = [folder for folder in all_folders if
-                       os.path.basename(folder).startswith('13') or os.path.basename(folder).startswith('14')]
         random.seed(42)
         random.shuffle(all_folders)
         trn_len = int(len(all_folders) * split_ratio[0])
@@ -359,7 +392,6 @@ class AntennaDataSetsLoader:
 
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
 
 
 class standard_scaler:
@@ -393,15 +425,22 @@ class ScalerManager:
             cache_scaler = pickle.load(open(self.path, 'rb'))
             self.scaler = cache_scaler
             print(f'Cached scaler loaded from: {self.path}')
+        else:
+            self.scaler = standard_scaler()
 
     def fit(self, data: np.ndarray):
         assert self.scaler is not None, 'Scaler is not initialized'
         self.scaler.fit(data)
         print(f'Scaler fitted')
 
-    def dump(self):
-        pickle.dump(self.scaler, open(self.path, 'wb'))
-        print(f'Fitted scaler saved in: {self.path}')
+    def dump(self, path: str = None):
+        dump_path = path if path is not None else self.path
+        pickle.dump(self.scaler, open(dump_path, 'wb'))
+        print(f'Fitted scaler saved in: {dump_path}')
+
+    def fit_and_dump(self, data: np.ndarray, path: str = None):
+        self.fit(data)
+        self.dump(path)
 
 
 class EnvironmentScalerLoader:
@@ -469,7 +508,7 @@ def radiation_mag_to_dB(radiation_mag: torch.Tensor):
 
 def radiation_to_linear(radiation: torch.Tensor):
     radiation_linear = radiation.clone()
-    radiation_linear[:, :int(radiation.shape[1] / 2)] =\
+    radiation_linear[:, :int(radiation.shape[1] / 2)] = \
         radiation_mag_to_linear(radiation[:, :int(radiation.shape[1] / 2)])
     return radiation_linear
 
@@ -496,7 +535,7 @@ def produce_gamma_stats(GT_gamma, predicted_gamma, dataset_type='linear', to_pri
     avg_respective_diff = torch.mean(respective_diff[torch.nonzero(respective_diff, as_tuple=True)]).item()
     avg_diff = torch.mean(diff_dB, dim=1)
     max_diff = torch.max(diff_dB, dim=1)[0]
-    #max_diff = torch.quantile(diff_dB,q=0.95,dim=1)
+    # max_diff = torch.quantile(diff_dB,q=0.95,dim=1)
     avg_max_diff = torch.mean(max_diff).item()
     diff_phase = predicted_gamma_phase - GT_gamma_phase
     while len(torch.where(diff_phase > np.pi)[0]) > 0 or len(torch.where(diff_phase < -np.pi)[0]) > 0:
@@ -531,7 +570,7 @@ def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
         diff_phase[torch.where(diff_phase > np.pi)] -= 2 * np.pi
         diff_phase[torch.where(diff_phase < -np.pi)] += 2 * np.pi
     max_diff_mag = torch.amax(abs_diff_mag, dim=(1, 2, 3))
-    #max_diff_mag = torch.quantile(abs_diff_mag.reshape(abs_diff_mag.shape[0], -1), q=0.95, dim=1)
+    # max_diff_mag = torch.quantile(abs_diff_mag.reshape(abs_diff_mag.shape[0], -1), q=0.95, dim=1)
     mean_abs_error_mag = torch.mean(torch.abs(abs_diff_mag), dim=(1, 2, 3))
     mean_max_error_mag = torch.mean(max_diff_mag).item()
     abs_diff_phase = torch.abs(diff_phase)
@@ -549,11 +588,30 @@ def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
     if to_print:
         print('Radiation - mean_abs_error_mag:', round(torch.mean(mean_abs_error_mag).item(), 4),
               ' dB, mean dB respective error: ', round(respective_diff, 4)
-              , '%, mean_max_error_mag:', round(mean_max_error_mag, 4)
-              , ' dB, mean_abs_error_phase:', round(torch.mean(mean_abs_error_phase).item(), 4),
-              ' rad, mean_max_error_phase:'
-              , round(mean_max_error_phase, 4), ' rad, msssim_mag:', round(avg_msssim_mag, 4))
-    return mean_abs_error_mag, max_diff_mag, mean_abs_error_phase, msssim_vals
+              , '%, mean_max_error_mag:', round(mean_max_error_mag, 4),
+              ' dB, msssim_mag:', round(avg_msssim_mag, 4))
+    return mean_abs_error_mag, max_diff_mag, msssim_vals
+
+
+def produce_stats_all_dataset(gamma_stats: Union[List[Tuple], np.ndarray],
+                              radiation_stats: Union[List[Tuple], np.ndarray]):
+    print('--' * 20)
+    gamma_stats_gathered = torch.tensor(gamma_stats)
+    gamma_stats_mean = torch.nanmean(gamma_stats_gathered, dim=0).numpy()
+    assert len(gamma_stats_mean) == 4, 'gamma stats mean should have 4 elements' \
+                                       ' (avg mag, max mag, avg phase, max phase)'
+    metrics_gamma_keys = [x + ' diff' for x in ['avg mag', 'max mag', 'avg phase', 'max phase']]
+    stats_dict_gamma = dict(zip(metrics_gamma_keys, gamma_stats_mean))
+    print(f'GAMMA STATS, averaged over entire dataset: {stats_dict_gamma}')
+    radiation_stats_gathered = torch.tensor(radiation_stats)
+    radiation_stats_mean = torch.nanmean(radiation_stats_gathered, dim=0).numpy()
+    assert len(radiation_stats_mean) == 4, 'radiation stats mean should have 4 elements' \
+                                           ' (avg mag, max mag, avg phase, msssim)'
+    metrics_rad_keys = [x + ' diff' for x in ['avg mag', 'max mag', 'avg phase', 'msssim']]
+    stats_dict_rad = dict(zip(metrics_rad_keys, radiation_stats_mean))
+    print(f'RADIATION STATS, averaged over entire dataset: {stats_dict_rad}')
+    print('--' * 20)
+    pass
 
 
 def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
@@ -630,7 +688,71 @@ def model_rel2abs(model_parameters):
     return model_parameters_abs
 
 
-class data_linewidth_plot():
+EXAMPLE_FOLDER = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\EXAMPLE'
+
+
+def ant_to_dict_representation(ant: torch.Tensor):
+    assert ant.ndim == 2, 'Antenna tensor should have 2 dimensions (batch, features)'
+    ant_path = os.path.join(EXAMPLE_FOLDER, 'ant_parameters.pickle')
+    with open(ant_path, 'rb') as f:
+        example = pickle.load(f)
+    all_ant_dicts = []
+    ant = ant.clone().detach().cpu().numpy()
+    for i in range(ant.shape[0]):
+        ant_i = np.round(ant[i], 2)
+        ant_i_dict = {key: val for key, val in zip(example.keys(), ant_i)}
+        all_ant_dicts.append(ant_i_dict)
+    return np.array(all_ant_dicts)
+
+
+def env_to_dict_representation(env: torch.Tensor):
+    assert env.ndim == 2, 'Environment tensor should have 2 dimensions (batch, features)'
+    env_path = os.path.join(EXAMPLE_FOLDER, 'model_parameters.pickle')
+    with open(env_path, 'rb') as f:
+        example = pickle.load(f)
+    all_env_dicts = []
+    env = env.clone().detach().cpu().numpy()
+    for i in range(env.shape[0]):
+        env_i = np.round(np.append([3], env[i]), 2)
+        env_i_dict = {key: val for key, val in zip(example.keys(), env_i)}
+        all_env_dicts.append(env_i_dict)
+    return np.array(all_env_dicts)
+
+
+def ant_rel2abs(ant_parameters, model_parameters):
+    ant_parameters_abs = ant_parameters.copy()
+    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
+          - model_parameters['feed_length'] / 2)
+    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    for key, value in ant_parameters.items():
+        if len(key) == 4:
+            if key[2] == 'z':
+                ant_parameters_abs[key] = np.round(value * Sz, decimals=2)
+            if key[2] == 'y':
+                ant_parameters_abs[key] = np.round(value * Sy, decimals=2)
+        if key == 'fx':
+            ant_parameters_abs[key] = np.round(value * Sy, decimals=2)
+    return ant_parameters_abs
+
+
+def ant_abs2rel(ant_parameters_abs, model_parameters):
+    ant_parameters_rel = ant_parameters_abs.copy()
+    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters_abs[
+        'w'] / 2
+          - model_parameters['feed_length'] / 2)
+    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters_abs['w']
+    for key, value in ant_parameters_abs.items():
+        if len(key) == 4:
+            if key[2] == 'z':
+                ant_parameters_rel[key] = np.round(value / Sz, decimals=2)
+            if key[2] == 'y':
+                ant_parameters_rel[key] = np.round(value / Sy, decimals=2)
+        if key == 'fx':
+            ant_parameters_rel[key] = np.round(value / Sy, decimals=2)
+    return ant_parameters_rel
+
+
+class data_linewidth_plot:
     def __init__(self, x, y, **kwargs):
         self.ax = kwargs.pop("ax", plt.gca())
         self.fig = self.ax.get_figure()
@@ -714,9 +836,7 @@ if __name__ == '__main__':
     data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\raw_data_130k_200k'
     destination_path = data_path.replace(os.path.basename(data_path), 'processed_data_130k_200k')
     preprocessor = DataPreprocessor(data_path=data_path, destination_path=destination_path)
-    #preprocessor.antenna_preprocessor()
-    #preprocessor.environment_preprocessor()
-    #preprocessor.radiation_preprocessor()
-    #preprocessor.gamma_preprocessor()
-
-    pass
+    preprocessor.antenna_preprocessor(debug=True)
+    preprocessor.environment_preprocessor(debug=True)
+    # preprocessor.radiation_preprocessor()
+    # preprocessor.gamma_preprocessor()
