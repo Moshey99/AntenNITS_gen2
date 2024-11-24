@@ -32,6 +32,8 @@ from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from shapely.geometry import Polygon
 from PCA_fitter.PCA_fitter_main import binarize
 
+EXAMPLE_FOLDER = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\EXAMPLE'
+
 
 class DatasetPart:
     def __init__(self):
@@ -61,6 +63,9 @@ class DataPreprocessor:
     def antenna_preprocessor(self, debug=False):
         scaler = standard_scaler()
         scaler_manager = ScalerManager(path=os.path.join(self.destination_path, 'ant_scaler.pkl'), scaler=scaler)
+        ant_path = os.path.join(EXAMPLE_FOLDER, 'ant_parameters.pickle')
+        with open(ant_path, 'rb') as f:
+            example = pickle.load(f)
         print('Preprocessing antennas')
         all_ants = []
         folder_path = self.folder_path
@@ -69,7 +74,8 @@ class DataPreprocessor:
             file_path = os.path.join(folder_path, name, 'ant_parameters.pickle')
             with open(file_path, 'rb') as f:
                 antenna_dict = pickle.load(f)
-            antenna = np.array(list(antenna_dict.values()))
+            antenna_vals = [antenna_dict[key] for key in example.keys()]
+            antenna = np.array(antenna_vals)
             all_ants.append(antenna)
             if not debug:
                 output_folder = os.path.join(self.destination_path, name)
@@ -83,6 +89,9 @@ class DataPreprocessor:
         print('Preprocessing environments')
         scaler = standard_scaler()
         scaler_manager = ScalerManager(path=os.path.join(self.destination_path, 'env_scaler.pkl'), scaler=scaler)
+        env_path = os.path.join(EXAMPLE_FOLDER, 'model_parameters.pickle')
+        with open(env_path, 'rb') as f:
+            example = pickle.load(f)
         all_envs = []
         folder_path = self.folder_path
         for idx, name in enumerate(sorted(os.listdir(folder_path))):
@@ -91,10 +100,11 @@ class DataPreprocessor:
             with open(file_path, 'rb') as f:
                 env_dict = pickle.load(f)
                 env_dict.pop('type', None)  # remove the first element which is the type of the mode (constant)
+                example.pop('type', None)
                 plane = env_dict.get('plane', None)
                 assert plane in ['xz', 'yz-flipped'], 'Plane parameter is missing in the environment'
                 env_dict['plane'] = 0 if plane == 'xz' else 1
-                env_vals = list(env_dict.values())
+                env_vals = [env_dict[key] for key in example.keys()]
                 assert np.all([type(value) != list for value in env_vals]), 'ERROR. List in Environments values'
                 all_envs.append(env_vals)
                 if not debug:
@@ -365,10 +375,12 @@ class AntennaDataSet(torch.utils.data.Dataset):
 class AntennaDataSetsLoader:
     def __init__(self, dataset_path: str, batch_size: int = None, repr_mode: str = 'abs',
                  pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
+        assert os.path.exists(dataset_path), f'Dataset path does not exist in {dataset_path}'
         if split_ratio is None:
-            split_ratio = [0.8, 0.19, 0.01]  # [trn, val, tst]
+            split_ratio = [0.8, 0.2, 0.0]  # [trn, val, tst]
         self.pca_wrapper = PCAWrapper(pca)
         self.split = split_ratio
+        self.repr_mode = repr_mode
         self.trn_folders, self.val_folders, self.tst_folders = [], [], []
         self.split_data(dataset_path, split_ratio)
         self.batch_size = batch_size if batch_size is not None else len(self.trn_folders)
@@ -389,6 +401,12 @@ class AntennaDataSetsLoader:
         self.trn_folders = all_folders[:trn_len]
         self.val_folders = all_folders[trn_len:trn_len + val_len]
         self.tst_folders = all_folders[trn_len + val_len:]
+
+    def load_test_data(self, test_path):
+        assert os.path.exists(test_path), f'Test path does not exist in {test_path}'
+        self.tst_folders = sorted([f.path for f in os.scandir(test_path) if f.is_dir()])
+        self.tst_dataset = AntennaDataSet(self.tst_folders, self.repr_mode, self.pca_wrapper, try_cache=False)
+        self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=self.batch_size)
 
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -688,9 +706,6 @@ def model_rel2abs(model_parameters):
     return model_parameters_abs
 
 
-EXAMPLE_FOLDER = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\EXAMPLE'
-
-
 def ant_to_dict_representation(ant: torch.Tensor):
     assert ant.ndim == 2, 'Antenna tensor should have 2 dimensions (batch, features)'
     ant_path = os.path.join(EXAMPLE_FOLDER, 'ant_parameters.pickle')
@@ -836,7 +851,33 @@ if __name__ == '__main__':
     data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\raw_data_130k_200k'
     destination_path = data_path.replace(os.path.basename(data_path), 'processed_data_130k_200k')
     preprocessor = DataPreprocessor(data_path=data_path, destination_path=destination_path)
-    preprocessor.antenna_preprocessor(debug=True)
-    preprocessor.environment_preprocessor(debug=True)
-    # preprocessor.radiation_preprocessor()
-    # preprocessor.gamma_preprocessor()
+    # path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\test_processed"
+    # path_to_save = os.path.join(path, 'data_fixed')
+    # os.makedirs(path_to_save, exist_ok=True)
+    # all_env_folders = os.path.join(path, 'environments')
+    # all_spec_folders = os.path.join(path, 'spectrums')
+    # for spec_name in os.listdir(all_spec_folders):
+    #     spec_folder = os.path.join(all_spec_folders, spec_name)
+    #     if os.path.isfile(spec_folder):
+    #         continue
+    #     radiation_file = os.path.join(spec_folder, 'radiation.npy')
+    #     gamma_file = os.path.join(spec_folder, 'gamma.npy')
+    #     dummy_antenna = np.ones(40)
+    #     for env_name in os.listdir(all_env_folders):
+    #         env_folder = os.path.join(all_env_folders, env_name)
+    #         if os.path.isfile(env_folder):
+    #             continue
+    #         env_file = os.path.join(env_folder, 'environment.npy')
+    #         full_name = f'SPEC_{spec_name}_ENV_{env_name}'
+    #         folder_full_name = os.path.join(path_to_save, full_name)
+    #         os.makedirs(folder_full_name, exist_ok=True)
+    #         np.save(os.path.join(folder_full_name, 'antenna.npy'), dummy_antenna)
+    #         np.save(os.path.join(folder_full_name, 'environment.npy'), np.load(env_file))
+    #         np.save(os.path.join(folder_full_name, 'gamma.npy'), np.load(gamma_file))
+    #         np.save(os.path.join(folder_full_name, 'radiation.npy'), np.load(radiation_file))
+    #         print(f'Processed {full_name}')
+
+    #preprocessor.antenna_preprocessor(debug=True)
+    #preprocessor.environment_preprocessor()
+    #preprocessor.radiation_preprocessor()
+    #preprocessor.gamma_preprocessor()
