@@ -193,7 +193,7 @@ def generate_overall_stats(model, data, top_n=5):
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\data_110k_150k_processed')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
     parser.add_argument('-o', '--output_folder', type=str, default=None)
     parser.add_argument('-g', '--gpu', type=str, default='')
     parser.add_argument('-b', '--batch_size', type=int, default=12)
