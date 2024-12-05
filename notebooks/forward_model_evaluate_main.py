@@ -8,9 +8,13 @@ import os
 from typing import Tuple
 
 
-def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarray, plot_type: str = '2d') -> plt.Figure:
+def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor],
+                   freqs: np.ndarray = np.arange(start=300, stop=3000.1, step=10.8),
+                   plot_type: str = '2d',
+                   title: str = '') -> plt.Figure:
     gamma, rad = condition
-    gamma_amp, gamma_phase = gamma[:, :gamma.shape[1] // 2], gamma[:, gamma.shape[1] // 2:]
+    gamma_sep = gamma.shape[1] // 2
+    gamma_amp, gamma_phase = gamma[:, :gamma_sep], gamma[:, gamma_sep:]
 
     # Create the subplots, ensuring 3D projection for 3D plots
     fig = plt.figure(figsize=(15, 5))
@@ -28,6 +32,7 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarr
     ax1.set_ylim([-20, 0])
     ax11.set_ylim([-np.pi, np.pi])
     ax11.set_ylabel('phase', color='r')
+    ax1.set_xlabel('frequency [MHz]')
     rad_first_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 0])**2 + radiation_mag_to_linear(rad[0, 1])**2))
     rad_second_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 2])**2 + radiation_mag_to_linear(rad[0, 3])**2))
     rad_third_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 4])**2 + radiation_mag_to_linear(rad[0, 5])**2))
@@ -35,14 +40,20 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor], freqs: np.ndarr
     if plot_type == '2d':
         # 2D plots using imshow
         ax2.imshow(rad_first_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
+        ax2.set_xticks([])
+        ax2.set_yticks([])
         ax3.imshow(rad_second_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
+        ax3.set_xticks([])
+        ax3.set_yticks([])
         ax4.imshow(rad_third_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
+        ax4.set_xticks([])
+        ax4.set_yticks([])
 
     # Set titles for the radiation pattern subplots
     ax2.set_title('rad f=1.5GHz')
     ax3.set_title('rad f=2.1GHz')
     ax4.set_title('rad f=2.4GHz')
-
+    fig.suptitle(title)
     return fig
 
 
@@ -88,7 +99,7 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         model.eval()
-        for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
+        for idx, sample in enumerate(antenna_dataset_loader.val_loader):
             EMBEDDINGS, GAMMA, RADIATION, ENV, name = sample
             embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), \
