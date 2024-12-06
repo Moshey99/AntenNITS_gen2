@@ -19,6 +19,7 @@ from pathlib import Path
 import glob
 from AntennaDesign.utils import *
 from AntennaDesign.models.forward_GammaRad import forward_GammaRad
+from notebooks.forward_model_evaluate_main import plot_condition
 
 
 def list_str_to_list(s):
@@ -36,16 +37,16 @@ def list_str_to_list(s):
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+parser.add_argument('--test_path', type=str, default=None)
 parser.add_argument('--checkpoint_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints_inverse\ANT_model_lr_0.0002_hd_512_nr_8_pd_0.995_bs_12.pth')
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints_inverse\ANT_model_lr_0.0002_hd_512_nr_8_pd_0.9_bs_12_drp_0.31_bounds_-3_3.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
-parser.add_argument('-b', '--batch_size', type=int, default=30)
 parser.add_argument('-g', '--gpu', type=str, default='')
 parser.add_argument('-hi', '--hidden_dim', type=int, default=512)
 parser.add_argument('-nr', '--n_residual_blocks', type=int, default=8)
 parser.add_argument('-n', '--patience', type=int, default=10)
 parser.add_argument('-ga', '--gamma', type=float, default=0.9)
-parser.add_argument('-pd', '--polyak_decay', type=float, default=0.9995)
+parser.add_argument('-pd', '--polyak_decay', type=float, default=0.9)
 parser.add_argument('-a', '--nits_arch', type=list_str_to_list, default='[16,16,1]')
 parser.add_argument('-dn', '--dont_normalize_inverse', type=bool, default=False)
 parser.add_argument('-l', '--learning_rate', type=float, default=2e-4)
@@ -54,8 +55,7 @@ parser.add_argument('-rc', '--add_residual_connections', type=bool, default=True
 parser.add_argument('-bm', '--bound_multiplier', type=int, default=1)
 parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
                     help='Weights for each step of multistep NITS')
-parser.add_argument('--scarf', action="store_true")
-parser.add_argument('--bounds', type=list_str_to_list, default='[-4,4]')
+parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
 parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
@@ -84,8 +84,9 @@ else:
 device = devices[0]
 
 data_path = args.data_path
-assert os.path.exists(data_path)
+assert os.path.exists(data_path), f'data_path in {data_path} does not exist'
 antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=True)
+antenna_dataset_loader.load_test_data(args.test_path) if args.test_path is not None else None
 shapes = antenna_dataset_loader.trn_dataset.shapes
 scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
 env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
@@ -146,15 +147,18 @@ model.load_state_dict(torch.load(checkpoint_path, map_location=device))
 model.eval()
 num_samples = args.num_samples
 with torch.no_grad():
-    for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
+    for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.val_loader):
         if idx < args.num_skip:
             print('skipping antenna: ', name[0])
             continue
         x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
             GAMMA.to(device), RADIATION.to(device), \
             env_scaler_manager.scaler.forward(ENV).float().to(device)
+        print('Working on antenna: ', name[0])
+        # plot_condition((gamma, rad))
+        # plt.show()
         condition = (gamma, rad, env)
-        print('sampling for antenna: ', name[0], end=' ')
+        print(f'sampling {args.num_samples} samples for antenna: ', name[0])
         start = time.time()
         smp = model.shadow.sample(num_samples, device, condition=condition)
         print(f'sampled {num_samples} samples in {time.time() - start} seconds.')
