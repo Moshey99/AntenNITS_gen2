@@ -152,7 +152,7 @@ if __name__ == "__main__":
                 pickle.dump(gt_ant_og_repr, ant_handle)
             if plot_GT_vs_pred:
                 figs_gt, axs_gt = plt.subplots(2, 1, figsize=(5, 10))
-                fig_gt = plot_condition((gamma, rad), freqs=np.arange(gamma.shape[1] // 2), plot_type='2d')
+                fig_gt = plot_condition((gamma, rad),  plot_type='2d')
                 img_gt = figure_to_image(fig_gt)
                 plt.close(fig_gt)
                 axs_gt[1].imshow(img_gt)
@@ -179,8 +179,7 @@ if __name__ == "__main__":
                     gamma_pred_dB_best = gamma_pred_dB_sorted[i].unsqueeze(0)
                     rad_pred_best = rad_pred_sorted[i].unsqueeze(0)
 
-                    fig_pred = plot_condition((gamma_pred_dB_best, rad_pred_best), freqs=np.arange(gamma.shape[1] // 2),
-                                              plot_type='2d')
+                    fig_pred = plot_condition((gamma_pred_dB_best, rad_pred_best), plot_type='2d')
                     img_pred = figure_to_image(fig_pred)
                     plt.close(fig_pred)
                     axs[1, i].imshow(img_pred)
