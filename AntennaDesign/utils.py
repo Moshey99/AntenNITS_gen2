@@ -115,10 +115,15 @@ class DataPreprocessor:
         scaler_manager.dump()
         print(f'Environments saved successfully')
 
-    def radiation_preprocessor(self, selected_frequencies=None, plot=False, debug=False):
+    @staticmethod
+    def default_selected_frequencies():
+        return [1500, 2100, 2400]
+
+    def radiation_preprocessor(self, mode: str = 'directivity', selected_frequencies=None, plot=False, debug=False):
+        assert mode in ['directivity', 'gain'], 'Invalid radiation mode'
         print('Preprocessing radiations')
         if selected_frequencies is None:
-            selected_frequencies = [1500, 2100, 2400]
+            selected_frequencies = self.default_selected_frequencies()
         folder_path = self.folder_path
         for idx, name in enumerate(sorted(os.listdir(folder_path))):
             print('working on antenna number:', name, f'({idx})', 'out of:', self.num_data_points)
@@ -129,9 +134,9 @@ class DataPreprocessor:
                 continue
             all_frequencies = []
             for freq in selected_frequencies:
-                freq_efficiency = self.find_efficiency_for_f(efficiency, freq)
+                freq_efficiency = 1 if mode == 'directivity' else self.find_efficiency_for_f(efficiency, freq)
                 file_path = os.path.join(sample_folder, f'farfield (f={freq}) [1].txt')
-                im_resized = np.zeros((4, 181, 91))
+                radiation_resized = np.zeros((4, 181, 91))
                 df = pd.read_csv(file_path, sep='\s+', skiprows=[0, 1], header=None)
                 df = df.apply(pd.to_numeric, errors='coerce')
                 arr = np.asarray(df)
@@ -142,25 +147,25 @@ class DataPreprocessor:
                 im_resh = np.transpose(im.reshape(angle2_res, angle1_res, -1), (2, 0, 1))
                 im_resh = im_resh[[0, 2, 1, 3], :, :]  # rearrange the channels to be [mag1, mag2, phase1, phase2]
                 for j in range(im_resh.shape[0]):
-                    current_im = np.clip(cv2.resize(im_resh[j], (91, 181), interpolation=cv2.INTER_LINEAR),
+                    current_ch = np.clip(cv2.resize(im_resh[j], (91, 181), interpolation=cv2.INTER_LINEAR),
                                          im_resh[j].min(), im_resh[j].max())
                     if j < 2:
-                        assert np.all(current_im >= 0), 'Negative values in radiation magnitude'
-                        current_im = current_im * freq_efficiency
-                        current_im = 10 * np.log10(current_im)
+                        assert np.all(current_ch >= 0), 'Negative values in radiation magnitude'
+                        current_ch = current_ch * freq_efficiency
+                        current_ch = 10 * np.log10(current_ch + 1e-7)
                     else:
-                        assert np.all(current_im >= 0) and np.all(current_im <= 360), 'Phase values out of range 0-360'
-                        current_im = np.deg2rad(current_im) - np.pi
+                        assert np.all(current_ch >= 0) and np.all(current_ch <= 360), 'Phase values out of range 0-360'
+                        current_ch = np.deg2rad(current_ch) - np.pi
 
-                    im_resized[j] = current_im
+                    radiation_resized[j] = current_ch
                     if plot:
                         titles = ['mag1', 'mag2', 'phase1', 'phase2']
                         plt.subplot(2, 2, j + 1)
-                        plt.imshow(current_im)
+                        plt.imshow(current_ch)
                         plt.title(titles[j])
                         plt.colorbar()
                         plt.show() if j == im_resh.shape[0] - 1 else None
-                all_frequencies.append(im_resized)
+                all_frequencies.append(radiation_resized)
 
             radiation_multi_frequencies = np.array(all_frequencies)
             mag_db, phase_radians = radiation_multi_frequencies[:, :2], radiation_multi_frequencies[:, 2:]
@@ -171,7 +176,9 @@ class DataPreprocessor:
             if not debug:
                 saving_folder = os.path.join(self.destination_path, name)
                 os.makedirs(saving_folder, exist_ok=True)
-                np.save(os.path.join(saving_folder, 'radiation.npy'), radiations)
+                file_name = 'radiation_directivity' if mode == 'directivity' else 'radiation'
+                file_path = os.path.join(saving_folder, file_name + '.npy')
+                np.save(file_path, radiations)
 
     def gamma_preprocessor(self, debug=False):
         print('Preprocessing gammas')
