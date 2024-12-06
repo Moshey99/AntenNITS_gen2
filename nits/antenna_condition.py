@@ -29,6 +29,8 @@ class GammaRadiationCondition(nn.Module):
         gamma, radiation = input
         if radiation.ndim == 3:
             radiation = radiation.unsqueeze(0)
+        rad_sep = radiation.shape[1] // 2
+        radiation = radiation[:, :rad_sep]  # only use magnitude of radiation for condition
         if self.radiation_backbone_input_layer is None:
             self.radiation_backbone_input_layer = resnet.ResNetBasicBlock(radiation.shape[1], 16).to(radiation.device)
         radiation_inp = self.radiation_backbone_input_layer(radiation)
