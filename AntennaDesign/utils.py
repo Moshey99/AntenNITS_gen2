@@ -365,7 +365,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
     def clip_radiation(radiation: np.ndarray):
         assert len(radiation.shape) == 3, 'Radiation shape is not 3D (channels, h, w)'
         sep_radiation = int(radiation.shape[0] / 2)
-        radiation[:sep_radiation] = np.clip(radiation[:sep_radiation], -10, 5)
+        radiation[:sep_radiation] = np.clip(radiation[:sep_radiation], -15, 5)
         return radiation
 
     @staticmethod
@@ -630,9 +630,9 @@ def produce_stats_all_dataset(gamma_stats: Union[List[Tuple], np.ndarray],
     print(f'GAMMA STATS, averaged over entire dataset: {stats_dict_gamma}')
     radiation_stats_gathered = torch.tensor(radiation_stats)
     radiation_stats_mean = torch.nanmean(radiation_stats_gathered, dim=0).numpy()
-    assert len(radiation_stats_mean) == 4, 'radiation stats mean should have 4 elements' \
-                                           ' (avg mag, max mag, avg phase, msssim)'
-    metrics_rad_keys = [x + ' diff' for x in ['avg mag', 'max mag', 'avg phase', 'msssim']]
+    assert len(radiation_stats_mean) == 3, 'radiation stats mean should have 4 elements' \
+                                           ' (avg mag, max mag, msssim)'
+    metrics_rad_keys = [x + ' diff' for x in ['avg mag', 'max mag', 'msssim']]
     stats_dict_rad = dict(zip(metrics_rad_keys, radiation_stats_mean))
     print(f'RADIATION STATS, averaged over entire dataset: {stats_dict_rad}')
     print('--' * 20)
@@ -741,7 +741,7 @@ def env_to_dict_representation(env: torch.Tensor):
     return np.array(all_env_dicts)
 
 
-def ant_rel2abs(ant_parameters, model_parameters):
+def ant_rel2abs(ant_parameters: dict, model_parameters: dict):
     ant_parameters_abs = ant_parameters.copy()
     Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
           - model_parameters['feed_length'] / 2)
@@ -757,7 +757,7 @@ def ant_rel2abs(ant_parameters, model_parameters):
     return ant_parameters_abs
 
 
-def ant_abs2rel(ant_parameters_abs, model_parameters):
+def ant_abs2rel(ant_parameters_abs: dict, model_parameters: dict):
     ant_parameters_rel = ant_parameters_abs.copy()
     Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters_abs[
         'w'] / 2
@@ -858,33 +858,8 @@ if __name__ == '__main__':
     data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\raw_data_130k_200k'
     destination_path = data_path.replace(os.path.basename(data_path), 'processed_data_130k_200k')
     preprocessor = DataPreprocessor(data_path=data_path, destination_path=destination_path)
-    # path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\test_processed"
-    # path_to_save = os.path.join(path, 'data_fixed')
-    # os.makedirs(path_to_save, exist_ok=True)
-    # all_env_folders = os.path.join(path, 'environments')
-    # all_spec_folders = os.path.join(path, 'spectrums')
-    # for spec_name in os.listdir(all_spec_folders):
-    #     spec_folder = os.path.join(all_spec_folders, spec_name)
-    #     if os.path.isfile(spec_folder):
-    #         continue
-    #     radiation_file = os.path.join(spec_folder, 'radiation.npy')
-    #     gamma_file = os.path.join(spec_folder, 'gamma.npy')
-    #     dummy_antenna = np.ones(40)
-    #     for env_name in os.listdir(all_env_folders):
-    #         env_folder = os.path.join(all_env_folders, env_name)
-    #         if os.path.isfile(env_folder):
-    #             continue
-    #         env_file = os.path.join(env_folder, 'environment.npy')
-    #         full_name = f'SPEC_{spec_name}_ENV_{env_name}'
-    #         folder_full_name = os.path.join(path_to_save, full_name)
-    #         os.makedirs(folder_full_name, exist_ok=True)
-    #         np.save(os.path.join(folder_full_name, 'antenna.npy'), dummy_antenna)
-    #         np.save(os.path.join(folder_full_name, 'environment.npy'), np.load(env_file))
-    #         np.save(os.path.join(folder_full_name, 'gamma.npy'), np.load(gamma_file))
-    #         np.save(os.path.join(folder_full_name, 'radiation.npy'), np.load(radiation_file))
-    #         print(f'Processed {full_name}')
-
-    #preprocessor.antenna_preprocessor(debug=True)
-    #preprocessor.environment_preprocessor()
-    #preprocessor.radiation_preprocessor()
-    #preprocessor.gamma_preprocessor()
+    debug = True
+    preprocessor.antenna_preprocessor(debug=debug)
+    preprocessor.environment_preprocessor(debug=debug)
+    preprocessor.radiation_preprocessor(debug=debug, mode='directivity')
+    preprocessor.gamma_preprocessor(debug=debug)
