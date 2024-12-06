@@ -70,8 +70,7 @@ def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
-    parser.add_argument('--test_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\test_processed\test_data_dipole')
+    parser.add_argument('--test_path', type=str, default=None)
     parser.add_argument('--forward_checkpoint_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth')
     parser.add_argument('--samples_folder_name', type=str, default='test_samples_dipole')
@@ -94,6 +93,9 @@ if __name__ == "__main__":
 
     antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=False)
     antenna_dataset_loader.load_test_data(args.test_path) if args.test_path is not None else None
+    path = args.test_path if args.test_path is not None else data_path
+    loader = antenna_dataset_loader.tst_loader if args.test_path is not None else antenna_dataset_loader.val_loader
+
     scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
     env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
     env_scaler_manager.try_loading_from_cache()
@@ -108,7 +110,7 @@ if __name__ == "__main__":
         all_gamma_stats, all_radiation_stats = [], []
         plot_GT_vs_pred = True
         model.eval()
-        for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.tst_loader):
+        for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(loader):
             if all([name[0] not in sample_name for sample_name in samples_names]) \
                     or GAMMA[:, :GAMMA.shape[1] // 2].min() > -5:
                 print(f'skipping antenna {name[0]} from the loader')
@@ -121,7 +123,7 @@ if __name__ == "__main__":
             samples = torch.tensor(np.load(os.path.join(samples_folder, f'sample_{name[0]}.npy'))).float().to(device)
 
             env_og_rel_repr = env_to_dict_representation(
-                torch.tensor(np.load(os.path.join(args.test_path, name[0], 'environment.npy'))[np.newaxis]))[0]
+                torch.tensor(np.load(os.path.join(path, name[0], 'environment.npy'))[np.newaxis]))[0]
             gt_ant_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(x))[0]
             samples_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples))
             assert args.repr_mode == 'abs',\

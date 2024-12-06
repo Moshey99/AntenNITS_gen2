@@ -87,6 +87,7 @@ data_path = args.data_path
 assert os.path.exists(data_path), f'data_path in {data_path} does not exist'
 antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=True)
 antenna_dataset_loader.load_test_data(args.test_path) if args.test_path is not None else None
+loader = antenna_dataset_loader.tst_loader if args.test_path is not None else antenna_dataset_loader.val_loader
 shapes = antenna_dataset_loader.trn_dataset.shapes
 scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
 env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
@@ -147,7 +148,7 @@ model.load_state_dict(torch.load(checkpoint_path, map_location=device))
 model.eval()
 num_samples = args.num_samples
 with torch.no_grad():
-    for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.val_loader):
+    for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(loader):
         if idx < args.num_skip:
             print('skipping antenna: ', name[0])
             continue
