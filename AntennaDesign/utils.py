@@ -336,7 +336,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
     def load_antenna(self, antenna_folder):
         self.ant = np.load(os.path.join(antenna_folder, 'antenna.npy'))
         self.gam = downsample_gamma(np.load(os.path.join(antenna_folder, 'gamma.npy'))[np.newaxis], rate=4).squeeze()
-        self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy'))[np.newaxis],
+        self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation_directivity.npy'))[np.newaxis],
                                         rates=[4, 2]).squeeze()
         self.rad = self.clip_radiation(self.rad)
         self.gam = self.clip_gamma(self.gam)
