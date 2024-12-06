@@ -70,24 +70,30 @@ def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+    parser.add_argument('--test_path', type=str,
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\test_processed\test_data_dipole')
     parser.add_argument('--forward_checkpoint_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth')
-    parser.add_argument('-o', '--output_folder', type=str, default=None)
+    parser.add_argument('--samples_folder_name', type=str, default='test_samples_dipole')
+    parser.add_argument('--output_folder_name', type=str, default='test_generated_antennas_dipole')
+    parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     return parser
 
 
 if __name__ == "__main__":
     args = arg_parser().parse_args()
-    args.repr_mode = 'abs'
     device = torch.device("cpu")
     data_path = args.data_path
-    output_folder = args.output_folder if args.output_folder is not None else os.path.join(args.data_path,
-                                                                                           'checkpoints_inverse')
-
-    samples_folder = os.path.join(output_folder, 'samples')
+    inverse_checkpoint_folder = os.path.join(args.data_path, 'checkpoints_inverse')
+    output_folder_name = args.output_folder_name if args.output_folder_name is not None else 'generated_antennas'
+    output_folder = os.path.join(inverse_checkpoint_folder, output_folder_name)
+    os.makedirs(output_folder, exist_ok=True)
+    samples_folder_name = args.samples_folder_name if args.samples_folder_name is not None else 'samples'
+    samples_folder = os.path.join(inverse_checkpoint_folder, samples_folder_name)
     samples_names = os.listdir(samples_folder)
-    # pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
+
     antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=False)
+    antenna_dataset_loader.load_test_data(args.test_path) if args.test_path is not None else None
     scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
     env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
     env_scaler_manager.try_loading_from_cache()
@@ -102,10 +108,10 @@ if __name__ == "__main__":
         all_gamma_stats, all_radiation_stats = [], []
         plot_GT_vs_pred = True
         model.eval()
-        for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
+        for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.tst_loader):
             if all([name[0] not in sample_name for sample_name in samples_names]) \
                     or GAMMA[:, :GAMMA.shape[1] // 2].min() > -5:
-                print(f'skipping antenna {name[0]}')
+                print(f'skipping antenna {name[0]} from the loader')
                 continue
             print(f'evaluating samples for antenna {name[0]}.')
             x, gamma, rad, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
@@ -114,18 +120,21 @@ if __name__ == "__main__":
 
             samples = torch.tensor(np.load(os.path.join(samples_folder, f'sample_{name[0]}.npy'))).float().to(device)
 
-            env_og_repr = env_to_dict_representation(
-                torch.tensor(np.load(os.path.join(data_path, name[0], 'environment.npy'))[np.newaxis]))[0]
+            env_og_rel_repr = env_to_dict_representation(
+                torch.tensor(np.load(os.path.join(args.test_path, name[0], 'environment.npy'))[np.newaxis]))[0]
             gt_ant_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(x))[0]
             samples_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples))
             assert args.repr_mode == 'abs',\
                 'Only absolute representation is supported for now. rel mode is not supported.'
             if args.repr_mode == 'abs':
                 #making sure the representation is relative
-                gt_ant_og_repr = ant_abs2rel(gt_ant_og_repr, env_og_repr)
-                samples_og_repr = [ant_abs2rel(ant, env_og_repr) for ant in samples_og_repr]
+                gt_ant_og_repr = ant_abs2rel(gt_ant_og_repr, env_og_rel_repr)
+                samples_og_repr = [ant_abs2rel(ant, env_og_rel_repr) for ant in samples_og_repr]
 
-            valid_samples_indices = get_valid_indices(samples_og_repr, env_og_repr)[:500]
+            valid_samples_indices = get_valid_indices(samples_og_repr, env_og_rel_repr)[:50]
+            if len(valid_samples_indices) < 3:
+                print(f'No valid samples for antenna {name[0]}.')
+                continue
             valid_samples = samples[valid_samples_indices]
 
             num_samples = valid_samples.shape[0]
@@ -147,8 +156,8 @@ if __name__ == "__main__":
             all_radiation_stats.append(top_k_radiation_stats)
             samples_sorted_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples_sorted))
             if args.repr_mode == 'abs':
-                samples_sorted_og_repr = [ant_abs2rel(ant, env_og_repr) for ant in samples_sorted_og_repr]
-            with open(os.path.join(output_folder, f'generated_top_1', f'ant_{name[0]}_gt.pickle'), 'wb') as ant_handle:
+                samples_sorted_og_repr = [ant_abs2rel(ant, env_og_rel_repr) for ant in samples_sorted_og_repr]
+            with open(os.path.join(output_folder, f'ant_{name[0]}_gt.pickle'), 'wb') as ant_handle:
                 pickle.dump(gt_ant_og_repr, ant_handle)
             if plot_GT_vs_pred:
                 figs_gt, axs_gt = plt.subplots(2, 1, figsize=(5, 10))
@@ -158,7 +167,7 @@ if __name__ == "__main__":
                 axs_gt[1].imshow(img_gt)
                 axs_gt[1].set_title('GT target')
                 axs_gt[1].axis('off')
-                antenna_fig = plot_antenna_figure(ant_parameters=gt_ant_og_repr, model_parameters=env_og_repr)
+                antenna_fig = plot_antenna_figure(ant_parameters=gt_ant_og_repr, model_parameters=env_og_rel_repr)
                 antenna_im = figure_to_image(antenna_fig)
                 plt.close(antenna_fig)
                 axs_gt[0].imshow(antenna_im)
@@ -167,12 +176,12 @@ if __name__ == "__main__":
 
                 fig, axs = plt.subplots(2, 3, figsize=(15, 10))
                 # save env_og_repr
-                with open(os.path.join(output_folder, 'generated_top_1', f'env_{name[0]}.pickle'), 'wb') as env_handle:
-                    pickle.dump(env_og_repr, env_handle)
+                with open(os.path.join(output_folder, f'env_{name[0]}.pickle'), 'wb') as env_handle:
+                    pickle.dump(env_og_rel_repr, env_handle)
                 for i in [0, 1, 2]:
                     ant_best_og_repr = samples_sorted_og_repr[i]
-                    counted[check_ant_validity(ant_best_og_repr, env_og_repr)] += 1
-                    with open(os.path.join(output_folder, 'generated_top_1', f'ant_{name[0]}_grade_{i}.pickle'),
+                    counted[check_ant_validity(ant_best_og_repr, env_og_rel_repr)] += 1
+                    with open(os.path.join(output_folder, f'ant_{name[0]}_grade_{i}.pickle'),
                               'wb') as ant_handle:
                         pickle.dump(ant_best_og_repr, ant_handle)
 
@@ -186,7 +195,7 @@ if __name__ == "__main__":
                     axs[1, i].set_title(f'Generated Prediction, idx: {i}')
                     axs[1, i].axis('off')  # Turn off axes for better visualization
                     antenna_fig = plot_antenna_figure(ant_parameters=ant_best_og_repr,
-                                                      model_parameters=env_og_repr)
+                                                      model_parameters=env_og_rel_repr)
                     antenna_im = figure_to_image(antenna_fig)
                     plt.close(antenna_fig)
                     axs[0, i].imshow(antenna_im)
@@ -194,7 +203,7 @@ if __name__ == "__main__":
                     axs[0, i].axis('off')
 
                 plt.tight_layout()
-                #plt.show(block=False)
+                plt.show()
 
         gamma_stats_final = np.array(all_gamma_stats)
         radiation_stats_final = np.array(all_radiation_stats)
