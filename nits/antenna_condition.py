@@ -49,11 +49,13 @@ class EnvironmentCondition(nn.Module):
         self.relu = nn.ELU()
         self.env_input_layer = None
         self.output_dim = output_dim
+        self.output_layer = nn.Linear(self.output_dim, self.output_dim)
 
-    def forward(self, input):
+    def forward(self, env):
         if self.env_input_layer is None:
-            self.env_input_layer = nn.Linear(input.shape[1], self.output_dim).to(input.device)
-        x = self.env_input_layer(input)
+            self.env_input_layer = nn.Linear(env.shape[1], self.output_dim).to(env.device)
+        x = self.relu(self.env_input_layer(env))
+        x = self.output_layer(x)
         return x
 
 
