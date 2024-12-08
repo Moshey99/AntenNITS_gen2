@@ -73,8 +73,8 @@ def arg_parser():
     parser.add_argument('--test_path', type=str, default=None)
     parser.add_argument('--forward_checkpoint_path', type=str, help='path to forward checkpoint',
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth')
-    parser.add_argument('--samples_folder_name', type=str, default=None)
-    parser.add_argument('--output_folder_name', type=str, default=None)
+    parser.add_argument('--samples_folder_name', type=str, default=None, help='folder base name for samples')
+    parser.add_argument('--output_folder_name', type=str, default=None, help='output folder base name')
     parser.add_argument('--repr_mode', type=str, help='use relative or absolute repr. for ant and env', default='abs')
     return parser
 
@@ -196,8 +196,7 @@ if __name__ == "__main__":
                     axs[1, i].imshow(img_pred)
                     axs[1, i].set_title(f'Generated Prediction, idx: {i}')
                     axs[1, i].axis('off')  # Turn off axes for better visualization
-                    antenna_fig = plot_antenna_figure(ant_parameters=ant_best_og_repr,
-                                                      model_parameters=env_og_rel_repr)
+                    antenna_fig = plot_antenna_figure(ant_parameters=ant_best_og_repr, model_parameters=env_og_rel_repr)
                     antenna_im = figure_to_image(antenna_fig)
                     plt.close(antenna_fig)
                     axs[0, i].imshow(antenna_im)

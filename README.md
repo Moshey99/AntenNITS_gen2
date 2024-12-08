@@ -110,3 +110,5 @@ which allows to evaluate the samples with exact simulator, to produce exact eval
 - It is recommended to work with PyCharm.
 - Mark ```AntennaDesign``` folder as Source root to use it as a starting point for resolving imports.\
 That is done in PyCharm by right-click on the folder, then **Mark Directory as --> Sources root**
+- The current project loads gain for the radiation, but it can be easily modified in ```AntennaDataSet.load_antenna``` method
+in ```utils.py``` to directivity by loading the appropriate file.
