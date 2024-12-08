@@ -85,7 +85,7 @@ device = devices[0]
 
 data_path = args.data_path
 assert os.path.exists(data_path), f'data_path in {data_path} does not exist'
-antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=True)
+antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1)
 antenna_dataset_loader.load_test_data(args.test_path) if args.test_path is not None else None
 loader = antenna_dataset_loader.tst_loader if args.test_path is not None else antenna_dataset_loader.val_loader
 shapes = antenna_dataset_loader.trn_dataset.shapes

@@ -91,7 +91,7 @@ if __name__ == "__main__":
     samples_folder = os.path.join(inverse_checkpoint_folder, samples_folder_name)
     samples_names = os.listdir(samples_folder)
 
-    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=False)
+    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1)
     antenna_dataset_loader.load_test_data(args.test_path) if args.test_path is not None else None
     path = args.test_path if args.test_path is not None else data_path
     loader = antenna_dataset_loader.tst_loader if args.test_path is not None else antenna_dataset_loader.val_loader

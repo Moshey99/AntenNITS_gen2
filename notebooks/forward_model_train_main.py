@@ -36,7 +36,6 @@ def arg_parser():
     parser.add_argument('--lamda', type=float, default=0.5, help='weight for radiation in gamma radiation loss')
     parser.add_argument('--checkpoint_path', type=str, default=None, help='path to save model checkpoints')
     parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
-    parser.add_argument('--try_cache', action='store_true', help='try to load from cache')
     parser.add_argument('--fit_scalers', action='store_true', help='fit scalers on the data', default=False)
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     return parser.parse_args()
