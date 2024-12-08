@@ -59,7 +59,7 @@ parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
 parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
-parser.add_argument('--num_samples', type=int, default=100)
+parser.add_argument('--num_samples', type=int, default=10)
 parser.add_argument('--num_skip', type=int, default=0)
 args = parser.parse_args()
 output_folder = os.path.join(args.data_path,

@@ -71,11 +71,11 @@ def arg_parser():
     parser.add_argument('-d', '--data_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
     parser.add_argument('--test_path', type=str, default=None)
-    parser.add_argument('--forward_checkpoint_path', type=str,
+    parser.add_argument('--forward_checkpoint_path', type=str, help='path to forward checkpoint',
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth')
-    parser.add_argument('--samples_folder_name', type=str, default='test_samples_dipole')
-    parser.add_argument('--output_folder_name', type=str, default='test_generated_antennas_dipole')
-    parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
+    parser.add_argument('--samples_folder_name', type=str, default=None)
+    parser.add_argument('--output_folder_name', type=str, default=None)
+    parser.add_argument('--repr_mode', type=str, help='use relative or absolute repr. for ant and env', default='abs')
     return parser
 
 
@@ -133,7 +133,7 @@ if __name__ == "__main__":
                 gt_ant_og_repr = ant_abs2rel(gt_ant_og_repr, env_og_rel_repr)
                 samples_og_repr = [ant_abs2rel(ant, env_og_rel_repr) for ant in samples_og_repr]
 
-            valid_samples_indices = get_valid_indices(samples_og_repr, env_og_rel_repr)[:50]
+            valid_samples_indices = get_valid_indices(samples_og_repr, env_og_rel_repr)[:500]
             if len(valid_samples_indices) < 3:
                 print(f'No valid samples for antenna {name[0]}.')
                 continue
