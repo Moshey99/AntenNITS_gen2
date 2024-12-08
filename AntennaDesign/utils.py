@@ -32,23 +32,7 @@ from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from shapely.geometry import Polygon
 from PCA_fitter.PCA_fitter_main import binarize
 
-EXAMPLE_FOLDER = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\EXAMPLE'
-
-
-class DatasetPart:
-    def __init__(self):
-        self.x = None
-        self.gamma = None
-        self.radiation = None
-
-
-class AntennaData:
-    def __init__(self):
-        self.Data = None
-        self.n_dims = None
-        self.trn = DatasetPart()
-        self.val = DatasetPart()
-        self.tst = DatasetPart()
+EXAMPLE_FOLDER = os.path.join(__file__, '..', 'EXAMPLE')
 
 
 class DataPreprocessor:
@@ -852,14 +836,3 @@ def plot_antenna_figure(model_parameters, ant_parameters, alpha=1):
     ax1.set_aspect('equal')
     # plt.show()
     return f
-
-
-if __name__ == '__main__':
-    data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\raw_data_130k_200k'
-    destination_path = data_path.replace(os.path.basename(data_path), 'processed_data_130k_200k')
-    preprocessor = DataPreprocessor(data_path=data_path, destination_path=destination_path)
-    debug = True
-    preprocessor.antenna_preprocessor(debug=debug)
-    preprocessor.environment_preprocessor(debug=debug)
-    preprocessor.radiation_preprocessor(debug=debug, mode='directivity')
-    preprocessor.gamma_preprocessor(debug=debug)
