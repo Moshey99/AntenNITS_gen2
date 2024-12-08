@@ -54,6 +54,10 @@ which is a pre-trained weights for the model.
 4. **checkpoints_inverse** folder - The path where inverse model's weights are saved. Contains ANT_model_lr_0.0002_hd_512_nr_8_pd_0.9_bs_12_drp_0.31_bounds_-3_3.pth
 pre-trained weights for the inverse model.\
 Moreover, this is the folder where generated antennas are saved into by default.
+5. **EXAMPLE folder** - 
+An auxiliary folder for ```utils.py``` in order to deal with the original representation of the model, as
+defined in the CST model interface. **Has no impact**, has it was moved to the repository to avoid complications.
+See further details in the **Repository Description** section.
 
 # Repository Description
 This section breaks down the repository with some explanation about the files.
