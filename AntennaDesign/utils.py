@@ -30,7 +30,6 @@ import ezdxf
 from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from shapely.geometry import Polygon
-from PCA_fitter.PCA_fitter_main import binarize
 
 EXAMPLE_FOLDER = os.path.join(__file__, '..', 'EXAMPLE')
 
@@ -250,8 +249,15 @@ class PCAWrapper:
 
     def apply_binarization_on_components(self, components: np.ndarray) -> np.ndarray:
         image = self.image_from_components(components)
-        image_binarized = binarize(image)
+        image_binarized = self.binarize(image)
         return self.components_from_image(image_binarized)
+
+    @staticmethod
+    def binarize(img, nonmetal_threshold=0.5, feed_threshold=1.5):
+        img[img < nonmetal_threshold] = 0
+        img[img >= feed_threshold] = 2
+        img[(img >= nonmetal_threshold) & (img < feed_threshold)] = 1
+        return img
 
     def apply_unnormalization_and_binarization_on_components(self, components: np.ndarray) -> np.ndarray:
         components_unnormalized = self.unnormalize_principal_components(components)
