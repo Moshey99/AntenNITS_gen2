@@ -123,19 +123,19 @@ def arg_parser():
     parser.add_argument('-d', '--data_path', type=str,
                 default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
     parser.add_argument('-o', '--output_folder', type=str, default=None)
-    parser.add_argument('-g', '--gpu', type=str, default='')
+    parser.add_argument('-g', '--gpu', type=str, default='', help='comma-separated list of GPU IDs')
     parser.add_argument('-b', '--batch_size', type=int, default=12)
     parser.add_argument('-hi', '--hidden_dim', type=int, default=512)
     parser.add_argument('-nr', '--n_residual_blocks', type=int, default=8)
-    parser.add_argument('-n', '--patience', type=int, default=10)
-    parser.add_argument('-ga', '--gamma', type=float, default=0.9)
-    parser.add_argument('-pd', '--polyak_decay', type=float, default=0.9)
-    parser.add_argument('-a', '--nits_arch', type=list_str_to_list, default='[16,16,1]')
+    parser.add_argument('-n', '--patience', type=int, default=10, help='epoch patience for early stopping')
+    parser.add_argument('-ga', '--gamma', type=float, default=0.9, help='gamma parameter for scheduler step')
+    parser.add_argument('-pd', '--polyak_decay', type=float, default=0.9, help='parameter for polyak average smoothing')
+    parser.add_argument('-a', '--nits_arch', type=list_str_to_list, default='[16,16,1]', help='architecture for the nits')
     parser.add_argument('-l', '--learning_rate', type=float, default=2e-4)
-    parser.add_argument('-p', '--dropout', type=float, default=-1.0)
-    parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]')
+    parser.add_argument('-p', '--dropout', type=float, default=-1.0, help='dropout probability')
+    parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]', help='bounds for the values of the antenna')
     parser.add_argument('--conditional', type=bool, default=True)
-    parser.add_argument('--conditional_dim', type=int, default=512)
+    parser.add_argument('--conditional_dim', type=int, default=512, help='dimensionality of the condition')
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     # these arguments are less used
     parser.add_argument('-dn', '--dont_normalize_inverse', type=bool, default=False)
@@ -187,7 +187,6 @@ if __name__ == "__main__":
         default_patience = 10
         data_path = args.data_path
         assert os.path.exists(data_path)
-        # pca = pickle.load(open(os.path.join(data_path, 'pca_model.pkl'), 'rb'))
         antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=args.batch_size)
         shapes = antenna_dataset_loader.trn_dataset.shapes
         print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
