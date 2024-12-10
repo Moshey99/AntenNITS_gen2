@@ -115,7 +115,7 @@ if __name__ == "__main__":
             radiation_stats = produce_radiation_stats(radiation, rad_pred)
             all_radiation_stats.append(radiation_stats)
             if plot_GT_vs_pred:
-                plot_condition((GAMMA, RADIATION), freqs=np.arange(GAMMA.shape[1] // 2))
-                plot_condition((gamma_pred_dB, rad_pred), freqs=np.arange(gamma_pred_dB.shape[1] // 2))
+                plot_condition((GAMMA, RADIATION))
+                plot_condition((gamma_pred_dB, rad_pred))
                 plt.show()
         produce_stats_all_dataset(all_gamma_stats, all_radiation_stats)
