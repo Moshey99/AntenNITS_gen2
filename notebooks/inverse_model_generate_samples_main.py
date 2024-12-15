@@ -59,7 +59,7 @@ parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]')
 parser.add_argument('--conditional', type=bool, default=True)
 parser.add_argument('--conditional_dim', type=int, default=512)
 parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
-parser.add_argument('--num_samples', type=int, default=100)
+parser.add_argument('--num_samples', type=int, default=10)
 parser.add_argument('--num_skip', type=int, default=0)
 args = parser.parse_args()
 output_folder = os.path.join(args.data_path,
@@ -85,8 +85,9 @@ device = devices[0]
 
 data_path = args.data_path
 assert os.path.exists(data_path), f'data_path in {data_path} does not exist'
-antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1, try_cache=True)
+antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=1)
 antenna_dataset_loader.load_test_data(args.test_path) if args.test_path is not None else None
+loader = antenna_dataset_loader.tst_loader if args.test_path is not None else antenna_dataset_loader.val_loader
 shapes = antenna_dataset_loader.trn_dataset.shapes
 scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
 env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
@@ -147,7 +148,7 @@ model.load_state_dict(torch.load(checkpoint_path, map_location=device))
 model.eval()
 num_samples = args.num_samples
 with torch.no_grad():
-    for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.val_loader):
+    for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(loader):
         if idx < args.num_skip:
             print('skipping antenna: ', name[0])
             continue

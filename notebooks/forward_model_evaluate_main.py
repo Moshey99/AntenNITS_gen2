@@ -1,5 +1,4 @@
 from models.forward_GammaRad import forward_GammaRad
-from losses import GammaRad_loss
 from AntennaDesign.utils import *
 
 import argparse
@@ -61,8 +60,7 @@ def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
-    parser.add_argument('--rad_range', type=list, default=[-10, 5], help='range of radiation values for scaling')
-    parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
+    parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
     parser.add_argument('--checkpoint_path', type=str,
                         default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth")
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
@@ -94,7 +92,6 @@ if __name__ == "__main__":
         target = (gamma, radiation)
         gamma_pred, rad_pred = model(geometry)
     model.load_state_dict(torch.load(args.checkpoint_path, map_location=device))
-    loss_fn = GammaRad_loss(geo_weight=args.geo_weight)
     model.to(device)
 
     with torch.no_grad():
@@ -104,9 +101,10 @@ if __name__ == "__main__":
             embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), \
                 env_scaler_manager.scaler.forward(ENV).float().to(device)
-            if antenna_dataset_loader.batch_size == 1 and gamma[:, :int(gamma.shape[1] // 2)].min() > -1.5:
+            gamma_mag = gamma[:int(gamma.shape[1] // 2)]
+            if gamma_mag.min() > -5:
                 print(f'Antenna #{name[0]} has bad resonance, skipping.')
-                continue  # skip antennas without good resonances (if batch size is 1, i.e. that's the only one in gamma)
+                continue
             print(f'Working on antenna #{name[0]}')
             geometry = torch.cat((embeddings, env), dim=1)
             target = (gamma, radiation)
@@ -117,7 +115,7 @@ if __name__ == "__main__":
             radiation_stats = produce_radiation_stats(radiation, rad_pred)
             all_radiation_stats.append(radiation_stats)
             if plot_GT_vs_pred:
-                plot_condition((GAMMA, RADIATION), freqs=np.arange(GAMMA.shape[1] // 2))
-                plot_condition((gamma_pred_dB, rad_pred), freqs=np.arange(gamma_pred_dB.shape[1] // 2))
+                plot_condition((GAMMA, RADIATION))
+                plot_condition((gamma_pred_dB, rad_pred))
                 plt.show()
         produce_stats_all_dataset(all_gamma_stats, all_radiation_stats)
