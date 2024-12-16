@@ -158,9 +158,11 @@ class GammaRad_loss(nn.Module):
         gamma_pred, radiation_pred, geo_pred = pred
         gamma_target, radiation_target = target
         gamma_loss = self.gamma_loss_fn(gamma_pred, gamma_target)
+        euc_gamma_loss = Euclidean_Gamma_Loss()(gamma_pred, gamma_target)
         radiation_loss = self.radiation_loss_fn(radiation_pred, radiation_target)
+        euc_rad_loss = Euclidean_Radiation_Loss()(radiation_pred, radiation_target)
         #print(f'Gamma Loss: {gamma_loss}, Radiation Loss: {radiation_loss}')
-        loss = gamma_loss + self.lamda * radiation_loss
+        loss = (1 - self.lamda) * (gamma_loss + self.euc_weight * euc_gamma_loss) + self.lamda * (radiation_loss + self.euc_weight * euc_rad_loss)
         return loss
 
     def geometry_loss(self, geo):
