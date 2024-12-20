@@ -71,16 +71,22 @@ class small_baseline_forward_model(nn.Module):
 
 class small_deeper_baseline_forward_model(nn.Module):
     """
-    model designed to find the regression between 12 geometric parameters as input and the spectrum parameters as output.
-    for now spectrum parameters are 251x2 = 502 parameters.
+    Model designed to find the regression between 12 geometric parameters as input and the spectrum parameters as output.
+    For now, spectrum parameters are 251x2 = 502 parameters.
     """
-    def __init__(self,weight_range=0.1,p_dropout=0.25):
-        super(small_deeper_baseline_forward_model,self).__init__()
+    def __init__(self, weight_range=0.1, p_dropout=0.25):
+        super(small_deeper_baseline_forward_model, self).__init__()
         self.name = "small baseline forward model with added 2 layers"
-        self.input_layer = None
+
+        # Layers
+        self.input_layer = None  # Initialize lazily later
         self.fc2 = nn.Linear(1024, 512)
+        self.bn2 = nn.BatchNorm1d(512)  # Batch normalization for fc2
         self.fc3 = nn.Linear(512, 512)
+        self.bn3 = nn.BatchNorm1d(512)  # Batch normalization for fc3
         self.fc4 = nn.Linear(512, 502)
+
+        # Activations, Dropout, and Constants
         self.elu = nn.ELU()
         self.sigmoid = nn.Sigmoid()
         self.dropout = nn.Dropout(p=p_dropout)
@@ -88,15 +94,24 @@ class small_deeper_baseline_forward_model(nn.Module):
 
     def forward(self, input):  # input is the geometric parameters
         if self.input_layer is None:
-            self.input_layer = nn.Sequential(nn.Linear(input.shape[1], 1024), self.elu).to(input.device)
+            self.input_layer = nn.Sequential(
+                nn.Linear(input.shape[1], 1024),
+                nn.BatchNorm1d(1024),  # Batch normalization for input layer
+                self.elu
+            ).to(input.device)
+
+        # Forward pass
         x = self.input_layer(input)
-        x = self.elu(self.fc2(x))  # Apply ReLU activation
-        x = self.elu(self.fc3(x))  # Apply ReLU activation
+        x = self.dropout(self.elu(self.bn2(self.fc2(x))))  # FC2 + BN + Activation + Dropout
+        x = self.dropout(self.elu(self.bn3(self.fc3(x))))  # FC3 + BN + Activation + Dropout
         x = self.fc4(x)
+
+        # Output processing
         mag = self.sigmoid(x[:, :x.shape[1] // 2])
         mag = torch.clamp(mag, self.eps, 1)
         phase = self.sigmoid(x[:, x.shape[1] // 2:]) * 2 * torch.pi - torch.pi  # phase is between -pi and pi
         output = torch.cat((mag, phase), dim=1)
+
         return output
 
 

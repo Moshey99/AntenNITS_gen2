@@ -31,7 +31,7 @@ def arg_parser():
     parser.add_argument('--step_size', type=int, default=1, help='step size for gamma decay')
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
-    parser.add_argument('--euc_weight', type=float, default=0.1, help='weight for euclidean loss in GammaRad loss')
+    parser.add_argument('--euc_weight', type=float, default=0., help='weight for euclidean loss in GammaRad loss')
     parser.add_argument('--rad_phase_fac', type=float, default=0., help='weight for phase in radiation loss')
     parser.add_argument('--lamda', type=float, default=0.5, help='weight for radiation in gamma radiation loss')
     parser.add_argument('--checkpoint_path', type=str, default=None, help='path to save model checkpoints')
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     while keep_training:
         if epoch % 10 == 0 and epoch > 0:
             print(f'Saving model at epoch {epoch}')
-            torch.save(model.state_dict(), os.path.join(checkpoints_path, f'forward_epoch_{epoch}.pth'))
+            torch.save(model.state_dict(), os.path.join(checkpoints_path, f'forward_epoch_{epoch}_lr_{args.lr}_bs_{args.batch_size}.pth'))
 
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
@@ -126,7 +126,7 @@ if __name__ == "__main__":
                 print('Early stopping - stayed at the same loss for too long.')
                 keep_training = False
             train_loss = 0
-    best_model_checkpoint_path = os.path.join(checkpoints_path, 'forward_best_dict.pth')
+    best_model_checkpoint_path = os.path.join(checkpoints_path, f'forward_best_dict_bestloss_{best_loss}_lr_{args.lr}_bs_{args.batch_size}_lamda_{args.lamda}.pth')
     torch.save(best_model.state_dict(), best_model_checkpoint_path)
     print('Training finished.')
     print(f'Best loss: {best_loss}')

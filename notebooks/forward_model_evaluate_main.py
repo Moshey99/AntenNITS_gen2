@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 from models.forward_GammaRad import forward_GammaRad
 from AntennaDesign.utils import *
 
@@ -62,7 +64,7 @@ def arg_parser():
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth")
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_epoch_5_bs_12_mode_abs_lamda_0.0.pth")
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     return parser.parse_args()
 
@@ -74,7 +76,7 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(args, device)
     # pca = pickle.load(open(os.path.join(args.data_path, 'pca_model.pkl'), 'rb'))
-    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=1)
+    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=2)
     model = forward_GammaRad(radiation_channels=12)
     scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
     env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))

@@ -101,14 +101,15 @@ class gamma_loss_dB(nn.Module):
             return self.weight * circular_loss
 
     def forward(self, pred, target):
-        pred_magnitude = 10 * torch.log10(pred[:, :pred.shape[1] // 2])  # expecting pred in linear scale, convert to dB
+        pred_magnitude = pred[:, :pred.shape[1] // 2]
+        pred_magnitude_db = gamma_mag_to_dB(pred_magnitude)  # expecting pred in linear scale, convert to dB
         smooth_loss_mag = self.smooth_loss_mag(pred_magnitude)
         pred_phase = pred[:, pred.shape[1] // 2:]
         smooth_loss_phase = self.smooth_loss_phase(pred_phase)
         target_magnitude = target[:, :target.shape[1] // 2]  # expecting target in dB
         target_phase = target[:, target.shape[1] // 2:]
-        mag_loss, phase_loss = self.dB_magnitude_loss(pred_magnitude, target_magnitude), self.phase_loss(pred_phase,
-                                                                                                         target_phase)
+        mag_loss, phase_loss = self.dB_magnitude_loss(pred_magnitude_db, target_magnitude), self.phase_loss(pred_phase,
+                                                                                                            target_phase)
         loss = mag_loss + phase_loss
         return loss + smooth_loss_mag + smooth_loss_phase
 
