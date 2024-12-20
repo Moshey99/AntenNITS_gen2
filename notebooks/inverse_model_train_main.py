@@ -1,7 +1,11 @@
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../AntennaDesign')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import argparse
 import copy
 import itertools
-import sys
 import time
 import torch
 import numpy as np
@@ -14,7 +18,6 @@ from nits.resmade import ResidualMADE
 from nits.fc_model import ResMADEModel
 from scipy.stats import gaussian_kde
 from scipy.special import kl_div
-import os
 from pathlib import Path
 import glob
 from AntennaDesign.utils import *

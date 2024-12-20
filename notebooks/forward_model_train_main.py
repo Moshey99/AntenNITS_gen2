@@ -1,10 +1,13 @@
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../AntennaDesign')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from models.forward_GammaRad import forward_GammaRad
 from losses import GammaRad_loss, Euclidean_GammaRad_Loss
 from AntennaDesign.utils import *
 
 import argparse
 import torch
-import os
 import pickle
 
 

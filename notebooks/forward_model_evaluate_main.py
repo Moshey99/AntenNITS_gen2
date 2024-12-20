@@ -1,9 +1,13 @@
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../AntennaDesign')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from models.forward_GammaRad import forward_GammaRad
 from AntennaDesign.utils import *
 
 import argparse
 import torch
-import os
 from typing import Tuple
 
 
