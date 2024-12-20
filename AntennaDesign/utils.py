@@ -31,7 +31,7 @@ from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from shapely.geometry import Polygon
 
-EXAMPLE_FOLDER = os.path.join(__file__, '..', 'EXAMPLE')
+EXAMPLE_FOLDER = os.path.join(Path(__file__).parent, 'EXAMPLE')
 
 
 class DataPreprocessor:
