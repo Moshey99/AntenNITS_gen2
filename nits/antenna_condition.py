@@ -29,6 +29,8 @@ class GammaRadiationCondition(nn.Module):
         gamma, radiation = input
         if radiation.ndim == 3:
             radiation = radiation.unsqueeze(0)
+        rad_sep = radiation.shape[1] // 2
+        radiation = radiation[:, :rad_sep]  # only use magnitude of radiation for condition
         if self.radiation_backbone_input_layer is None:
             self.radiation_backbone_input_layer = resnet.ResNetBasicBlock(radiation.shape[1], 16).to(radiation.device)
         radiation_inp = self.radiation_backbone_input_layer(radiation)
@@ -47,11 +49,13 @@ class EnvironmentCondition(nn.Module):
         self.relu = nn.ELU()
         self.env_input_layer = None
         self.output_dim = output_dim
+        self.output_layer = nn.Linear(self.output_dim, self.output_dim)
 
-    def forward(self, input):
+    def forward(self, env):
         if self.env_input_layer is None:
-            self.env_input_layer = nn.Linear(input.shape[1], self.output_dim).to(input.device)
-        x = self.env_input_layer(input)
+            self.env_input_layer = nn.Linear(env.shape[1], self.output_dim).to(env.device)
+        x = self.relu(self.env_input_layer(env))
+        x = self.output_layer(x)
         return x
 
 

@@ -326,7 +326,7 @@ class AntennaDataSet(torch.utils.data.Dataset):
     def load_antenna(self, antenna_folder):
         self.ant = np.load(os.path.join(antenna_folder, 'antenna.npy'))
         self.gam = downsample_gamma(np.load(os.path.join(antenna_folder, 'gamma.npy'))[np.newaxis], rate=4).squeeze()
-        self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation.npy'))[np.newaxis],
+        self.rad = downsample_radiation(np.load(os.path.join(antenna_folder, 'radiation_directivity.npy'))[np.newaxis],
                                         rates=[4, 2]).squeeze()
         self.rad = self.clip_radiation(self.rad)
         self.gam = self.clip_gamma(self.gam)
@@ -369,6 +369,44 @@ class AntennaDataSet(torch.utils.data.Dataset):
         self.ant, self.embeddings, self.gam, self.rad, self.env = None, None, None, None, None
 
 
+def filter_out_folder(folder_path):
+    import time
+    start = time.time()
+    gamma_file = os.path.join(folder_path, 'gamma.npy')
+    gamma = downsample_gamma(np.load(gamma_file)[np.newaxis], rate=4).squeeze()
+    gamma_phase = gamma[gamma.shape[0] // 2:]
+    num_minimas = find_local_minima(gamma_phase, 9)
+    end = time.time()
+    print(f'Time taken to find local minima: {end - start} seconds')
+    if len(num_minimas) >= 4:
+        print(f'Filtering out folder: {folder_path}')
+        return True
+
+
+def find_local_minima(arr, n):
+    if n < 1:
+        raise ValueError("n must be at least 1")
+
+    arr = np.asarray(arr)  # Ensure the input is a NumPy array
+
+    # Handle edge cases: if the array is too small
+    if len(arr) <= 2 * n:
+        return np.array([], dtype=int)
+
+    # Iterate through the array and check neighbors
+    minima_indices = []
+    for i in range(n, len(arr) - n):
+        # Extract left and right neighbors
+        left_neighbors = arr[i - n:i]
+        right_neighbors = arr[i + 1:i + n + 1]
+
+        # Check if the current value is smaller than all neighbors
+        if arr[i] < np.min(left_neighbors) and arr[i] < np.min(right_neighbors):
+            minima_indices.append(i)
+
+    return np.array(minima_indices)
+
+
 class AntennaDataSetsLoader:
     def __init__(self, dataset_path: str, batch_size: int = None, repr_mode: str = 'abs',
                  pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
@@ -384,12 +422,20 @@ class AntennaDataSetsLoader:
         self.trn_dataset = AntennaDataSet(self.trn_folders, repr_mode, self.pca_wrapper, try_cache)
         self.val_dataset = AntennaDataSet(self.val_folders, repr_mode, self.pca_wrapper, try_cache)
         self.tst_dataset = AntennaDataSet(self.tst_folders, repr_mode, self.pca_wrapper, try_cache)
-        self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=self.batch_size)
+        self.trn_loader = torch.utils.data.DataLoader(self.trn_dataset, batch_size=self.batch_size, drop_last=True)
         self.val_loader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size)
         self.tst_loader = torch.utils.data.DataLoader(self.tst_dataset, batch_size=self.batch_size)
 
     def split_data(self, dataset_path, split_ratio):
-        all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]*')))
+        filtered_folders_file = os.path.join(dataset_path, 'filtered_dataset_folders.pkl')
+        if os.path.exists(filtered_folders_file):
+            print('Loading filtered folders from cache')
+            with open(filtered_folders_file, 'rb') as f:
+                all_folders_basenames = pickle.load(f)
+                all_folders = [os.path.join(dataset_path, f) for f in all_folders_basenames]
+        else:
+            print('filtered folders not found, not filtering')
+            all_folders = sorted(glob.glob(os.path.join(dataset_path, '[0-9]*')))
         random.seed(42)
         random.shuffle(all_folders)
         trn_len = int(len(all_folders) * split_ratio[0])
@@ -489,9 +535,8 @@ def downsample_radiation(radiation, rates=[4, 2]):
 
 
 def gamma_to_dB(gamma: torch.Tensor):
-    gamma_dB = gamma.clone()
-    gamma_dB[:, :int(gamma.shape[1] / 2)] = gamma_mag_to_dB(gamma[:, :int(gamma.shape[1] / 2)])
-    return gamma_dB
+    gamma[:, :int(gamma.shape[1] / 2)] = gamma_mag_to_dB(gamma[:, :int(gamma.shape[1] / 2)])
+    return gamma
 
 
 def gamma_mag_to_dB(gamma_mag: torch.Tensor):
@@ -500,9 +545,8 @@ def gamma_mag_to_dB(gamma_mag: torch.Tensor):
 
 
 def gamma_to_linear(gamma: torch.Tensor):
-    gamma_linear = gamma.clone()
-    gamma_linear[:, :int(gamma.shape[1] / 2)] = gamma_mag_to_linear(gamma[:, :int(gamma.shape[1] / 2)])
-    return gamma_linear
+    gamma[:, :int(gamma.shape[1] / 2)] = gamma_mag_to_linear(gamma[:, :int(gamma.shape[1] / 2)])
+    return gamma
 
 
 def gamma_mag_to_linear(gamma_mag: torch.Tensor):
@@ -511,9 +555,8 @@ def gamma_mag_to_linear(gamma_mag: torch.Tensor):
 
 
 def radiation_to_dB(radiation: torch.Tensor):
-    radiation_dB = radiation.clone()
-    radiation_dB[:, :int(radiation.shape[1] / 2)] = radiation_mag_to_dB(radiation[:, :int(radiation.shape[1] / 2)])
-    return radiation_dB
+    radiation[:, :int(radiation.shape[1] / 2)] = radiation_mag_to_dB(radiation[:, :int(radiation.shape[1] / 2)])
+    return radiation
 
 
 def radiation_mag_to_dB(radiation_mag: torch.Tensor):
@@ -522,10 +565,8 @@ def radiation_mag_to_dB(radiation_mag: torch.Tensor):
 
 
 def radiation_to_linear(radiation: torch.Tensor):
-    radiation_linear = radiation.clone()
-    radiation_linear[:, :int(radiation.shape[1] / 2)] = \
-        radiation_mag_to_linear(radiation[:, :int(radiation.shape[1] / 2)])
-    return radiation_linear
+    radiation[:, :int(radiation.shape[1] / 2)] = radiation_mag_to_linear(radiation[:, :int(radiation.shape[1] / 2)])
+    return radiation
 
 
 def radiation_mag_to_linear(radiation_mag: torch.Tensor):

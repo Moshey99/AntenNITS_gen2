@@ -32,7 +32,7 @@ def preprocess_mat(mat):
     gamma, radiation = torch.tensor(gamma).to(dev).unsqueeze(0), torch.tensor(rad_concat_swapped).to(dev).unsqueeze(0)
     gamma_down = downsample_gamma(gamma, 4).squeeze(0)
     radiation_down = downsample_radiation(radiation, rates=[4, 2]).squeeze(0)
-    gamma_down[:gamma_down.shape[0] // 2] = 10 * np.log10(gamma_down[:gamma_down.shape[0] // 2])
+    gamma_down[:gamma_down.shape[0] // 2] = 20 * np.log10(gamma_down[:gamma_down.shape[0] // 2])
     radiation_down[:radiation_down.shape[0] // 2] = 10 * np.log10(radiation_down[:radiation_down.shape[0] // 2])
     return gamma_down, radiation_down.cpu().detach().numpy()
 
@@ -95,7 +95,7 @@ def main():
                                 , predicted_spectrum_sample)
     prnt = inv_or_forw
     pred_gamma_sample = pred_gamma[sample].cpu().detach().numpy()
-    pred_gamma_sample[:int(0.5 * GT_gamma.shape[1])] = 10 * np.log10(pred_gamma_sample[:int(0.5 * GT_gamma.shape[1])])
+    pred_gamma_sample[:int(0.5 * GT_gamma.shape[1])] = 20 * np.log10(pred_gamma_sample[:int(0.5 * GT_gamma.shape[1])])
     GT_gamma_sample = GT_gamma[sample].cpu().detach().numpy()
     if args.compare_forward:
         plt.figure()

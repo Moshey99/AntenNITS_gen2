@@ -3,6 +3,8 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../AntennaDesign')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import matplotlib.pyplot as plt
+
 from models.forward_GammaRad import forward_GammaRad
 from AntennaDesign.utils import *
 
@@ -66,7 +68,7 @@ def arg_parser():
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth")
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\updated_forward_best_dict.pth")
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     return parser.parse_args()
 

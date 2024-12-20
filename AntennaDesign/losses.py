@@ -101,14 +101,15 @@ class gamma_loss_dB(nn.Module):
             return self.weight * circular_loss
 
     def forward(self, pred, target):
-        pred_magnitude = 10 * torch.log10(pred[:, :pred.shape[1] // 2])  # expecting pred in linear scale, convert to dB
+        pred_magnitude = pred[:, :pred.shape[1] // 2]
+        pred_magnitude_db = gamma_mag_to_dB(pred_magnitude)  # expecting pred in linear scale, convert to dB
         smooth_loss_mag = self.smooth_loss_mag(pred_magnitude)
         pred_phase = pred[:, pred.shape[1] // 2:]
         smooth_loss_phase = self.smooth_loss_phase(pred_phase)
         target_magnitude = target[:, :target.shape[1] // 2]  # expecting target in dB
         target_phase = target[:, target.shape[1] // 2:]
-        mag_loss, phase_loss = self.dB_magnitude_loss(pred_magnitude, target_magnitude), self.phase_loss(pred_phase,
-                                                                                                         target_phase)
+        mag_loss, phase_loss = self.dB_magnitude_loss(pred_magnitude_db, target_magnitude), self.phase_loss(pred_phase,
+                                                                                                            target_phase)
         loss = mag_loss + phase_loss
         return loss + smooth_loss_mag + smooth_loss_phase
 
@@ -158,9 +159,11 @@ class GammaRad_loss(nn.Module):
         gamma_pred, radiation_pred, geo_pred = pred
         gamma_target, radiation_target = target
         gamma_loss = self.gamma_loss_fn(gamma_pred, gamma_target)
+        euc_gamma_loss = Euclidean_Gamma_Loss()(gamma_pred, gamma_target)
         radiation_loss = self.radiation_loss_fn(radiation_pred, radiation_target)
+        euc_rad_loss = Euclidean_Radiation_Loss()(radiation_pred, radiation_target)
         #print(f'Gamma Loss: {gamma_loss}, Radiation Loss: {radiation_loss}')
-        loss = gamma_loss + self.lamda * radiation_loss
+        loss = (1 - self.lamda) * (gamma_loss + self.euc_weight * euc_gamma_loss) + self.lamda * (radiation_loss + self.euc_weight * euc_rad_loss)
         return loss
 
     def geometry_loss(self, geo):
