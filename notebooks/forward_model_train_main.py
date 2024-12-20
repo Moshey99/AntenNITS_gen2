@@ -41,12 +41,13 @@ def arg_parser():
     parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
     parser.add_argument('--fit_scalers', action='store_true', help='fit scalers on the data', default=False)
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
+    parser.add_argument('--gpu', type=int, default=0, help='GPU to use')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = arg_parser()
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
     print(args, device)
     antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, repr_mode=args.repr_mode)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
