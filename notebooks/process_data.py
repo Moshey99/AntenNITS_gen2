@@ -12,7 +12,7 @@ def parse_args():
     parser.add_argument('--process_antenna', action='store_true', help='Process antenna data')
     parser.add_argument('--process_environment', action='store_true', help='Process environment data')
     parser.add_argument('--process_radiation', action='store_true', help='Process radiation data')
-    parser.add_argument('--radiation_mode', action='directivity', help='Process directivity data')
+    parser.add_argument('--radiation_mode', type=str, default='directivity', help='Process directivity data')
     parser.add_argument('--process_gamma', action='store_true', help='Process gamma data')
     return parser.parse_args()
 
