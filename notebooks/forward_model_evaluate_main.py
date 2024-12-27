@@ -88,8 +88,6 @@ if __name__ == "__main__":
     ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'ant_{scaler_name}.pkl'))
     ant_scaler_manager.try_loading_from_cache()
     for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
-        if idx == 1:
-            break
         EMBEDDINGS, GAMMA, RADIATION, ENV, _ = sample
         embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
             GAMMA.to(device), RADIATION.to(device), \
@@ -97,6 +95,7 @@ if __name__ == "__main__":
         geometry = torch.cat((embeddings, env), dim=1)
         target = (gamma, radiation)
         gamma_pred, rad_pred = model(geometry)
+        break
     model.load_state_dict(torch.load(args.checkpoint_path, map_location=device))
     model.to(device)
 
