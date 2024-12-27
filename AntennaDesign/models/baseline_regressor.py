@@ -81,9 +81,7 @@ class small_deeper_baseline_forward_model(nn.Module):
         # Layers
         self.input_layer = None  # Initialize lazily later
         self.fc2 = nn.Linear(1024, 512)
-        self.bn2 = nn.BatchNorm1d(512)  # Batch normalization for fc2
         self.fc3 = nn.Linear(512, 512)
-        self.bn3 = nn.BatchNorm1d(512)  # Batch normalization for fc3
         self.fc4 = nn.Linear(512, 502)
 
         # Activations, Dropout, and Constants
@@ -96,14 +94,13 @@ class small_deeper_baseline_forward_model(nn.Module):
         if self.input_layer is None:
             self.input_layer = nn.Sequential(
                 nn.Linear(input.shape[1], 1024),
-                nn.BatchNorm1d(1024),  # Batch normalization for input layer
                 self.elu
             ).to(input.device)
 
         # Forward pass
         x = self.input_layer(input)
-        x = self.dropout(self.elu(self.bn2(self.fc2(x))))  # FC2 + BN + Activation + Dropout
-        x = self.dropout(self.elu(self.bn3(self.fc3(x))))  # FC3 + BN + Activation + Dropout
+        x = self.elu(self.fc2(x))
+        x = self.elu(self.fc3(x))
         x = self.fc4(x)
 
         # Output processing
