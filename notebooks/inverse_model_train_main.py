@@ -140,6 +140,7 @@ def arg_parser():
     parser.add_argument('--conditional', type=bool, default=True)
     parser.add_argument('--conditional_dim', type=int, default=512, help='dimensionality of the condition')
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
+    parser.add_argument('--run_info', type=str, default='', help='run information')
     # these arguments are less used
     parser.add_argument('-dn', '--dont_normalize_inverse', type=bool, default=False)
     parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
@@ -168,7 +169,7 @@ if __name__ == "__main__":
     model_names = []
     for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hidden_dim_grid, nr_blocks_grid,
                                                                          polyak_decay_grid, batch_size_grid):
-        model_extra_string = f'lr_{lr}_hd_{hidden_dim}_nr_{nr_blocks}_pd_{polyak_decay}_bs_{bs}'
+        model_extra_string = f'lr_{lr}_hd_{hidden_dim}_nr_{nr_blocks}_pd_{polyak_decay}_bs_{bs}_info_{args.run_info}'
         model_names.append(model_extra_string)
         print(model_extra_string)
         args.learning_rate = lr

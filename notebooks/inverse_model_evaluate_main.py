@@ -77,7 +77,7 @@ def arg_parser():
                         default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
     parser.add_argument('--test_path', type=str, default=None)
     parser.add_argument('--forward_checkpoint_path', type=str, help='path to forward checkpoint',
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\forward_best_dict.pth')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\updated_forward_best_dict.pth')
     parser.add_argument('--samples_folder_name', type=str, default=None, help='folder base name for samples')
     parser.add_argument('--output_folder_name', type=str, default=None, help='output folder base name')
     parser.add_argument('--repr_mode', type=str, help='use relative or absolute repr. for ant and env', default='abs')
@@ -116,8 +116,8 @@ if __name__ == "__main__":
         plot_GT_vs_pred = True
         model.eval()
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(loader):
-            if all([name[0] not in sample_name for sample_name in samples_names]) \
-                    or GAMMA[:, :GAMMA.shape[1] // 2].min() > -5:
+            if all([name[0] not in sample_name for sample_name in samples_names]):
+                    #or GAMMA[:, :GAMMA.shape[1] // 2].min() > -5:
                 print(f'skipping antenna {name[0]} from the loader')
                 continue
             print(f'evaluating samples for antenna {name[0]}.')
@@ -138,7 +138,7 @@ if __name__ == "__main__":
                 gt_ant_og_repr = ant_abs2rel(gt_ant_og_repr, env_og_rel_repr)
                 samples_og_repr = [ant_abs2rel(ant, env_og_rel_repr) for ant in samples_og_repr]
 
-            valid_samples_indices = get_valid_indices(samples_og_repr, env_og_rel_repr)[:500]
+            valid_samples_indices = get_valid_indices(samples_og_repr, env_og_rel_repr)
             if len(valid_samples_indices) < 3:
                 print(f'No valid samples for antenna {name[0]}.')
                 continue
@@ -164,8 +164,6 @@ if __name__ == "__main__":
             samples_sorted_og_repr = ant_to_dict_representation(ant_scaler_manager.scaler.inverse(samples_sorted))
             if args.repr_mode == 'abs':
                 samples_sorted_og_repr = [ant_abs2rel(ant, env_og_rel_repr) for ant in samples_sorted_og_repr]
-            with open(os.path.join(output_folder, f'ant_{name[0]}_gt.pickle'), 'wb') as ant_handle:
-                pickle.dump(gt_ant_og_repr, ant_handle)
             if plot_GT_vs_pred:
                 figs_gt, axs_gt = plt.subplots(2, 1, figsize=(5, 10))
                 fig_gt = plot_condition((gamma, rad),  plot_type='2d')
@@ -208,8 +206,8 @@ if __name__ == "__main__":
                     axs[0, i].set_title(f'Generated Antenna, idx: {i}')
                     axs[0, i].axis('off')
 
-                plt.tight_layout()
-                plt.show()
+                # plt.tight_layout()
+                # plt.show()
 
         gamma_stats_final = np.array(all_gamma_stats)
         radiation_stats_final = np.array(all_radiation_stats)
