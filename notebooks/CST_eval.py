@@ -37,7 +37,8 @@ if __name__ == "__main__":
                                        rates=[4, 2]).squeeze()
         cst_rad = torch.tensor(AntennaDataSet.clip_radiation(cst_rad)).float()
         cst_name = os.path.basename(folder)
-        antenna_name = re.sub(r'_grade_\d+', '', cst_name)
+        addon_to_remove = r'_nn' if filter_tag.__contains__('nn') else r'_grade_\d+'
+        antenna_name = re.sub(addon_to_remove, '', cst_name)
         print('Working on CST antenna:', cst_name, 'Matching test case:', antenna_name)
         gt_gam = downsample_gamma(np.load(os.path.join(data_path, antenna_name, 'gamma.npy'))[np.newaxis],
                                   rate=4).squeeze()
