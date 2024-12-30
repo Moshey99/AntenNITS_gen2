@@ -68,8 +68,8 @@ class HyperEnv(nn.Module):
 
     def forward(self, x):
         if self.fc1_bias_gen is None or self.fc1_weight_gen is None:
-            self.fc1_bias_gen = nn.Linear(x.shape[1], self.target_shapes["fc1.bias"], device=self.device)
-            self.fc1_weight_gen = nn.Linear(x.shape[1], self.target_shapes["fc1.weight"], device=self.device)
+            self.fc1_bias_gen = nn.Linear(x.shape[1], self.target_shapes["fc1.bias"], device=x.device)
+            self.fc1_weight_gen = nn.Linear(x.shape[1], self.target_shapes["fc1.weight"], device=x.device)
         bias = self.fc1_bias_gen(x)
         weight = self.fc1_weight_gen(x)
         return {'fc1.bias': bias, 'fc1.weight': weight}
