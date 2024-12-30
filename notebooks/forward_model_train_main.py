@@ -1,3 +1,4 @@
+import copy
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../AntennaDesign')))
@@ -121,7 +122,7 @@ if __name__ == "__main__":
             print(f'Validation Loss: {val_loss}')
             if val_loss < best_loss:
                 best_loss = val_loss
-                best_model = model
+                best_model = copy.deepcopy(model)
                 patience = args.patience
             else:
                 patience -= 1

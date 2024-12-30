@@ -137,7 +137,7 @@ if __name__ == "__main__":
                 print('Early stopping - stayed at the same loss for too long.')
                 keep_training = False
             train_loss = 0
-    best_model = copy.deepcopy(best_model if best_model is not None else model)
+    best_model = best_model if best_model is not None else model
     best_model_checkpoint_path = os.path.join(checkpoints_path, f'inv_forward_best_dict_bestloss_{best_loss}_lr_{args.lr}_bs_{args.batch_size}_lamda_{args.lamda}.pth')
     torch.save(best_model.state_dict(), best_model_checkpoint_path)
     print('Training finished.')
