@@ -62,6 +62,7 @@ if __name__ == "__main__":
     epoch = 0
     patience = args.patience
     checkpoints_path = os.path.join(args.data_path, 'checkpoints') if args.checkpoint_path is None else args.checkpoint_path
+    os.makedirs(checkpoints_path, exist_ok=True)
     best_loss = np.inf
     train_loss = 0
     scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
