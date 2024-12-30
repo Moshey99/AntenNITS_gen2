@@ -190,8 +190,7 @@ class inverse_radiation_hyper(nn.Module):
 
 
 class inverse_forward_concat(nn.Module):
-    def __init__(self, inv_module=None, forw_module=None, forward_weights_path_rad=None,
-                 forward_weights_path_gamma=None):
+    def __init__(self, inv_module=None, forw_module=None, forward_weights_path=None):
         super(inverse_forward_concat, self).__init__()
         if inv_module is None:
             self.inverse_module = small_inverse_radiation_no_hyper()
@@ -201,22 +200,19 @@ class inverse_forward_concat(nn.Module):
             self.forward_module = baseline_regressor.small_deeper_baseline_forward_model()
         else:
             self.forward_module = forw_module
-        if forward_weights_path_rad is not None or forward_weights_path_gamma is not None:
-            self.load_and_freeze_forward((forward_weights_path_rad, forward_weights_path_gamma))
+        if forward_weights_path is not None:
+            self.load_and_freeze_forward(forward_weights_path)
 
     def load_and_freeze_forward(self, weights_path):
-        path_rad, path_gamma = weights_path
-        if path_gamma is not None:
-            self.forward_module.gamma_net.load_state_dict(torch.load(path_gamma))
-        if path_rad is not None:
-            self.forward_module.radiation_net.load_state_dict(torch.load(path_rad))
+        self.forward_module.load_state_dict(torch.load(weights_path))
         for param in self.forward_module.parameters():
             param.requires_grad = False
 
-    def forward(self, input):
-        geometry = self.inverse_module(input)
+    def forward(self, gamma: torch.Tensor, rad: torch.Tensor, env: torch.Tensor):
+        ant = self.inverse_module(gamma, rad, env)
+        geometry = torch.cat((ant, env), dim=1)
         gamma, radiation = self.forward_module(geometry)
-        return gamma, radiation, geometry
+        return gamma, radiation, ant
 
 
 if __name__ == "__main__":
