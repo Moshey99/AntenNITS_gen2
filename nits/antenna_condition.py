@@ -60,28 +60,32 @@ class EnvironmentCondition(nn.Module):
 
 
 class HyperEnv(nn.Module):
-    def __init__(self, input_dim, target_shapes: dict):
+    def __init__(self, target_shapes: dict):
         super(HyperEnv, self).__init__()
-        self.fc1_bias_gen = nn.Linear(input_dim, target_shapes["fc1.bias"])
-        self.fc1_weight_gen = nn.Linear(input_dim, target_shapes["fc1.weight"])
+        self.target_shapes = target_shapes
+        self.fc1_bias_gen = None
+        self.fc1_weight_gen = None
 
     def forward(self, x):
+        if self.fc1_bias_gen is None or self.fc1_weight_gen is None:
+            self.fc1_bias_gen = nn.Linear(x.shape[1], self.target_shapes["fc1.bias"])
+            self.fc1_weight_gen = nn.Linear(x.shape[1], self.target_shapes["fc1.weight"])
         bias = self.fc1_bias_gen(x)
         weight = self.fc1_weight_gen(x)
         return {'fc1.bias': bias, 'fc1.weight': weight}
 
 
 class GammaRadHyperEnv(nn.Module):
-    def __init__(self, hyper_input_dim, shapes: dict):
+    def __init__(self, shapes: dict):
         super(GammaRadHyperEnv, self).__init__()
         self.shapes = shapes
         self.gamma_rad_condition = GammaRadiationCondition(condition_dim=shapes["fc1.inp_dim"])
         target_shapes = {"fc1.bias": shapes["fc1.out_dim"], "fc1.weight": shapes["fc1.inp_dim"]*shapes["fc1.out_dim"]}
-        self.environment_hypernet = HyperEnv(input_dim=hyper_input_dim, target_shapes=target_shapes)
+        self.environment_hypernet = HyperEnv(target_shapes=target_shapes)
 
-    def forward(self, gamma_rad_data: tuple, env_data: torch.Tensor):
-        x = self.gamma_rad_condition(gamma_rad_data)
-        weights = self.environment_hypernet(env_data)
+    def forward(self, gamma: torch.Tensor, rad: torch.Tensor, env: torch.Tensor):
+        x = self.gamma_rad_condition((gamma, rad))
+        weights = self.environment_hypernet(env)
         x = torch.bmm(x.unsqueeze(1), weights['fc1.weight'].view(-1, self.shapes["fc1.inp_dim"], self. shapes["fc1.out_dim"])).squeeze(1) + weights['fc1.bias']
         return x
 
@@ -96,7 +100,7 @@ if __name__ == "__main__":
     gammarad_condition_dim = 512
     antenna_dim = 40
     target_shapes = {"fc1.inp_dim": gammarad_condition_dim, "fc1.out_dim": antenna_dim}
-    grhe = GammaRadHyperEnv(hyper_input_dim=32, shapes=target_shapes)
+    grhe = GammaRadHyperEnv(shapes=target_shapes)
     num_params_grhe = sum(p.numel() for p in grhe.parameters())
     print(f"Number of parameters in GammaRadHyperEnv: {num_params_grhe}")
     output_grhe = grhe((gamma, radiation), env)
