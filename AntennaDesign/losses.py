@@ -149,7 +149,7 @@ class GammaRad_loss(nn.Module):
     def __init__(self, gamma_loss_fn=None, radiation_loss_fn=None, lamda=1.0, rad_phase_fac=0.0, geo_weight=1e-4, euc_weight=1e-2):
         super(GammaRad_loss, self).__init__()
         if gamma_loss_fn is None:
-            self.gamma_loss_fn = Euclidean_Gamma_Loss()  # gamma_loss_dB()
+            self.gamma_loss_fn = gamma_loss_dB()
         if radiation_loss_fn is None:
             self.radiation_loss_fn = radiation_loss_dB(mag_loss='huber', rad_phase_factor=rad_phase_fac)
         self.lamda = lamda
