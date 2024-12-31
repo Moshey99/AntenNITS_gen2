@@ -803,6 +803,24 @@ def ant_abs2rel(ant_parameters_abs: dict, model_parameters: dict):
     return ant_parameters_rel
 
 
+class AntValidityFunction:
+    def __init__(
+        self,
+        sample_path: str,
+        ant_scaler: ScalerManager
+    ) -> None:
+        self.path = sample_path
+        self.ant_scaler = ant_scaler
+
+    def __call__(self, ant: torch.Tensor) -> bool:
+        env_og_rel_repr = env_to_dict_representation(
+            torch.tensor(np.load(os.path.join(self.path, 'environment.npy'))[np.newaxis]))[0]
+        ant_abs = self.ant_scaler.scaler.inverse(ant)
+        ant_og_abs_repr = ant_to_dict_representation(ant_abs)[0]
+        ant_og_rel_repr = ant_abs2rel(ant_og_abs_repr, env_og_rel_repr)
+        return bool(check_ant_validity(ant_og_rel_repr, env_og_rel_repr))
+
+
 class data_linewidth_plot:
     def __init__(self, x, y, **kwargs):
         self.ax = kwargs.pop("ax", plt.gca())
