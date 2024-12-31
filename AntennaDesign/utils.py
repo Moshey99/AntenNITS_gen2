@@ -535,43 +535,41 @@ def downsample_radiation(radiation, rates=[4, 2]):
 
 
 def gamma_to_dB(gamma: torch.Tensor):
-    gamma[:, :int(gamma.shape[1] / 2)] = gamma_mag_to_dB(gamma[:, :int(gamma.shape[1] / 2)])
-    return gamma
-
+    gamma_copy = gamma.clone()  # Create a copy to avoid in-place modification
+    gamma_copy[:, :int(gamma_copy.shape[1] / 2)] = gamma_mag_to_dB(gamma_copy[:, :int(gamma_copy.shape[1] / 2)])
+    return gamma_copy
 
 def gamma_mag_to_dB(gamma_mag: torch.Tensor):
     gamma_mag_dB = 20 * torch.log10(gamma_mag)
     return gamma_mag_dB
 
-
 def gamma_to_linear(gamma: torch.Tensor):
-    gamma[:, :int(gamma.shape[1] / 2)] = gamma_mag_to_linear(gamma[:, :int(gamma.shape[1] / 2)])
-    return gamma
-
+    gamma_copy = gamma.clone()  # Create a copy to avoid in-place modification
+    gamma_copy[:, :int(gamma_copy.shape[1] / 2)] = gamma_mag_to_linear(gamma_copy[:, :int(gamma_copy.shape[1] / 2)])
+    return gamma_copy
 
 def gamma_mag_to_linear(gamma_mag: torch.Tensor):
     gamma_mag_linear = 10 ** (gamma_mag / 20)
     return gamma_mag_linear
 
-
 def radiation_to_dB(radiation: torch.Tensor):
-    radiation[:, :int(radiation.shape[1] / 2)] = radiation_mag_to_dB(radiation[:, :int(radiation.shape[1] / 2)])
-    return radiation
-
+    radiation_copy = radiation.clone()  # Create a copy to avoid in-place modification
+    radiation_copy[:, :int(radiation_copy.shape[1] / 2)] = radiation_mag_to_dB(radiation_copy[:, :int(radiation_copy.shape[1] / 2)])
+    return radiation_copy
 
 def radiation_mag_to_dB(radiation_mag: torch.Tensor):
     radiation_mag_dB = 10 * torch.log10(radiation_mag)
     return radiation_mag_dB
 
-
 def radiation_to_linear(radiation: torch.Tensor):
-    radiation[:, :int(radiation.shape[1] / 2)] = radiation_mag_to_linear(radiation[:, :int(radiation.shape[1] / 2)])
-    return radiation
-
+    radiation_copy = radiation.clone()  # Create a copy to avoid in-place modification
+    radiation_copy[:, :int(radiation_copy.shape[1] / 2)] = radiation_mag_to_linear(radiation_copy[:, :int(radiation_copy.shape[1] / 2)])
+    return radiation_copy
 
 def radiation_mag_to_linear(radiation_mag: torch.Tensor):
     radiation_mag_linear = 10 ** (radiation_mag / 10)
     return radiation_mag_linear
+
 
 
 def produce_gamma_stats(GT_gamma, predicted_gamma, dataset_type='linear', to_print=True):
@@ -677,7 +675,7 @@ def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
     sio.savemat(path, {'antenna': antenna_unscaled})
 
 
-def check_ant_validity(ant_parameters, model_parameters):
+def check_ant_validity(ant_parameters, model_parameters) -> int:
     Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
           - model_parameters['feed_length'] / 2)
     Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']

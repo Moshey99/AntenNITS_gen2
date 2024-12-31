@@ -3,7 +3,9 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../AntennaDesign')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from models.forward_GammaRad import forward_GammaRad
+from AntennaDesign.models.forward_GammaRad import forward_GammaRad
+from AntennaDesign.models.inverse_hypernet import inverse_forward_concat
+from nits.antenna_condition import GammaRadHyperEnv
 from losses import GammaRad_loss, Euclidean_GammaRad_Loss
 from AntennaDesign.utils import *
 
@@ -12,23 +14,12 @@ import torch
 import pickle
 
 
-def fit_scalers(ant_scaler_manager: ScalerManager, env_scaler_manager: ScalerManager):
-    print('Fitting scalers, this may take a while...')
-    eps = 0.01
-    data_loader = AntennaDataSetsLoader(args.data_path, split_ratio=[1-eps, eps/2, eps/2], repr_mode='both')
-    for idx, sample in enumerate(data_loader.trn_loader):
-        ANT, ANT_abs, GAMMA, RADIATION, ENV, ENV_abs, name = sample
-        ant_scaler_manager.fit_and_dump(ANT_abs.numpy())
-        env_scaler_manager.fit_and_dump(ENV_abs.numpy())
-        ant_scaler_manager.fit_and_dump(ANT.numpy(), path=ant_scaler_manager.path.replace('.pkl', '_rel.pkl'))
-        env_scaler_manager.fit_and_dump(ENV.numpy(), path=env_scaler_manager.path.replace('.pkl', '_rel.pkl'))
-    print('Scalers fitted and dumped.')
-
-
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
                 default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+    parser.add_argument('--forward_checkpoint_path', type=str,
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\updated_forward_best_dict.pth")
     parser.add_argument('--batch_size', type=int, default=12)
     parser.add_argument('--lr', type=float, default=1e-3, help='initial learning rate')
     parser.add_argument('--gamma_schedule', type=float, default=0.95, help='gamma decay rate')
@@ -40,7 +31,6 @@ def arg_parser():
     parser.add_argument('--lamda', type=float, default=0.5, help='weight for radiation in gamma radiation loss')
     parser.add_argument('--checkpoint_path', type=str, default=None, help='path to save model checkpoints')
     parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
-    parser.add_argument('--fit_scalers', action='store_true', help='fit scalers on the data', default=False)
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     parser.add_argument('--gpu', type=int, default=0, help='GPU to use')
     return parser.parse_args()
@@ -52,10 +42,27 @@ if __name__ == "__main__":
     print(args, device)
     antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, repr_mode=args.repr_mode)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
-    model = forward_GammaRad(radiation_channels=12, rad_range=args.rad_range)
+    ant_out_dim = antenna_dataset_loader.trn_dataset.shapes['ant'][0]
+    model = inverse_forward_concat(forw_module=forward_GammaRad(radiation_channels=12, rad_range=args.rad_range),
+                                   inv_module=GammaRadHyperEnv(shapes={"fc1.inp_dim": 512, "fc1.out_dim": ant_out_dim}),
+                                   )
     loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda,
                             rad_phase_fac=args.rad_phase_fac, euc_weight=args.euc_weight)
-    #loss_fn = Euclidean_GammaRad_Loss(lamda=args.lamda)
+    scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
+    env_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'env_{scaler_name}.pkl'))
+    env_scaler_manager.try_loading_from_cache()
+    ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'ant_{scaler_name}.pkl'))
+    ant_scaler_manager.try_loading_from_cache()
+    best_model = None
+    for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
+        model.to(device)
+        EMBEDDINGS, GAMMA, RADIATION, ENV, _ = sample
+        embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
+            GAMMA.to(device), RADIATION.to(device), \
+            env_scaler_manager.scaler.forward(ENV).float().to(device)
+        gamma_pred, rad_pred, ant = model(gamma, radiation, env)
+        break
+    model.load_and_freeze_forward(args.forward_checkpoint_path)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_schedule)
@@ -71,11 +78,10 @@ if __name__ == "__main__":
     env_scaler_manager.try_loading_from_cache()
     ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'ant_{scaler_name}.pkl'))
     ant_scaler_manager.try_loading_from_cache()
-    fit_scalers(ant_scaler_manager, env_scaler_manager) if args.fit_scalers else None
     while keep_training:
         if epoch % 10 == 0 and epoch > 0:
             print(f'Saving model at epoch {epoch}')
-            torch.save(model.state_dict(), os.path.join(checkpoints_path, f'forward_epoch_{epoch}_lr_{args.lr}_bs_{args.batch_size}.pth'))
+            torch.save(model.state_dict(), os.path.join(checkpoints_path, f'inv_forward_epoch_{epoch}_lr_{args.lr}_bs_{args.batch_size}.pth'))
 
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
@@ -84,10 +90,10 @@ if __name__ == "__main__":
             ant, gamma, radiation, env = ant_scaler_manager.scaler.forward(ANT).float().to(device),\
                 GAMMA.to(device), RADIATION.to(device), \
                 env_scaler_manager.scaler.forward(ENV).float().to(device)
-            geometry = torch.cat((ant, env), dim=1)
             target = (gamma, radiation)
             optimizer.zero_grad()
-            gamma_pred, rad_pred = model(geometry)
+            gamma_pred, rad_pred, ant_pred = model(gamma, radiation, env)
+            geometry = torch.cat((ant_pred, env), dim=1)
             output = (gamma_pred, rad_pred, geometry)
             loss = loss_fn(output, target)
             loss.backward()
@@ -110,9 +116,9 @@ if __name__ == "__main__":
                 ant, gamma, radiation, env = ant_scaler_manager.scaler.forward(ANT).float().to(device), \
                     GAMMA.to(device), RADIATION.to(device), \
                     env_scaler_manager.scaler.forward(ENV).float().to(device)
-                geometry = torch.cat((ant, env), dim=1)
                 target = (gamma, radiation)
-                gamma_pred, rad_pred = model(geometry)
+                gamma_pred, rad_pred, ant_pred = model(gamma, radiation, env)
+                geometry = torch.cat((ant_pred, env), dim=1)
                 produce_gamma_stats(gamma, gamma_to_dB(gamma_pred), dataset_type='dB', to_print=True)
                 produce_radiation_stats(radiation, rad_pred, to_print=True)
                 output = (gamma_pred, rad_pred, geometry)
@@ -132,7 +138,8 @@ if __name__ == "__main__":
                 print('Early stopping - stayed at the same loss for too long.')
                 keep_training = False
             train_loss = 0
-    best_model_checkpoint_path = os.path.join(checkpoints_path, f'forward_best_dict_bestloss_{best_loss}_lr_{args.lr}_bs_{args.batch_size}_lamda_{args.lamda}.pth')
+    best_model = best_model if best_model is not None else model
+    best_model_checkpoint_path = os.path.join(checkpoints_path, f'inv_forward_best_dict_bestloss_{best_loss}_lr_{args.lr}_bs_{args.batch_size}_lamda_{args.lamda}.pth')
     torch.save(best_model.state_dict(), best_model_checkpoint_path)
     print('Training finished.')
     print(f'Best loss: {best_loss}')
