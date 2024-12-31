@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F, init
 from torch.nn.utils import weight_norm as wn
-from nits.antenna_condition import GammaRadiationCondition, EnvironmentCondition
+from nits.antenna_condition import GammaRadiationCondition, EnvironmentCondition, GammaRadHyperEnv
 
 
 def tile(x, n):
@@ -307,17 +307,17 @@ class CausalTransformer(nn.Module):
 
 
 class ResidualMADE(nn.Module):
-    def __init__(self, input_dim, n_residual_blocks, hidden_dim,
-                 output_dim_multiplier, conditional=False, conditioning_dim=None,
-                 activation=F.relu, use_batch_norm=False,
-                 dropout_probability=None, zero_initialization=True,
-                 weight_norm=False):
+    def __init__(self, input_dim, n_residual_blocks, hidden_dim, output_dim_multiplier,
+                 conditional=False, conditioning_dim=None, condition_mode=None, activation=F.relu, use_batch_norm=False,
+                 dropout_probability=None, zero_initialization=True, weight_norm=False):
         super().__init__()
+        assert condition_mode in ['hyper', 'separated'], "condition_mode must be 'hyper' or 'separated'"
         self.input_dim = input_dim
         self.output_dim_multiplier = output_dim_multiplier
         assert hidden_dim > 32, 'Hidden dimension must be greater than 32.'
         self.spec_dim = hidden_dim - 32
         self.conditional = conditional
+        self.condition_mode = condition_mode
         self.activation = activation
         self.initial_layer = MaskedLinear(
             input_dim,
@@ -328,10 +328,13 @@ class ResidualMADE(nn.Module):
         )
         if conditional:
             assert conditioning_dim is not None, 'Dimension of condition variables must be specified.'
-        self.spectrum_condition_backbone = GammaRadiationCondition(condition_dim=conditioning_dim)
-        self.spectrum_condition_layers = nn.Sequential(self.spectrum_condition_backbone, nn.ELU(),
-                                                       nn.Linear(conditioning_dim, self.spec_dim))
-        self.environment_condition_layers = EnvironmentCondition(output_dim=hidden_dim - self.spec_dim)
+            if condition_mode == "separated":
+                self.spectrum_condition_backbone = GammaRadiationCondition(condition_dim=conditioning_dim)
+                self.spectrum_condition_layers = nn.Sequential(self.spectrum_condition_backbone, nn.ELU(),
+                                                               nn.Linear(conditioning_dim, self.spec_dim))
+                self.environment_condition_layers = EnvironmentCondition(output_dim=hidden_dim - self.spec_dim)
+            elif condition_mode == "hyper":
+                self.condition_features_backbone = GammaRadHyperEnv(shapes={"fc1.inp_dim": conditioning_dim, "fc1.out_dim": hidden_dim})
         self.blocks = nn.ModuleList(
             [MaskedResidualBlock(
                 features=hidden_dim,
@@ -354,24 +357,25 @@ class ResidualMADE(nn.Module):
 
     def forward(self, x, conditional_inputs=None):
         x = self.initial_layer(x)
-        spectrum_condition, environment_condition = self.get_conditions(x, conditional_inputs)
-        x[:, :self.spec_dim] += spectrum_condition
-        x[:, self.spec_dim:] += environment_condition
+        condition_features = self.get_condition_features(x, conditional_inputs)
+        x += condition_features
         for block in self.blocks:
             x = block(x)
         x = self.activation(x)
         x = self.final_layer(x)
         return x
 
-    def get_conditions(self, x, conditional_inputs):
+    def get_condition_features(self, x, conditional_inputs):
+        condition_features = torch.zeros_like(x, device=x.device)
         if self.conditional and conditional_inputs is not None:
             cond_gamma, cond_rad, cond_env = conditional_inputs
-            spectrum_condition = self.spectrum_condition_layers((cond_gamma, cond_rad))
-            environment_condition = self.environment_condition_layers(cond_env)
-        else:
-            spectrum_condition = torch.zeros_like(x, device=x.device)
-            environment_condition = torch.zeros_like(x, device=x.device)
-        return spectrum_condition, environment_condition
+            if self.condition_mode == "separated":
+                spectrum_condition = self.spectrum_condition_layers((cond_gamma, cond_rad))
+                environment_condition = self.environment_condition_layers(cond_env)
+                condition_features = torch.cat((spectrum_condition, environment_condition), dim=1)
+            elif self.condition_mode == "hyper":
+                condition_features = self.condition_features_backbone(cond_gamma, cond_rad, cond_env)
+        return condition_features
 
 
 def check_connectivity():
