@@ -1,3 +1,5 @@
+import copy
+
 import torch
 from typing import Callable, Tuple
 
@@ -10,6 +12,7 @@ class GeneticAlgorithm:
             generations: int,
             mutation_stddev: float,
             fitness_function: Callable[[torch.Tensor], torch.Tensor],
+            initial_population: torch.Tensor = None,
             device: str = None,
     ) -> None:
         """
@@ -29,11 +32,18 @@ class GeneticAlgorithm:
         self.mutation_stddev: float = mutation_stddev
         self.fitness_function: Callable[[torch.Tensor], torch.Tensor] = fitness_function
         self.device: str = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.population: torch.Tensor = self._create_initial_population()
+        self._set_initial_population(initial_population)
+
+    def _set_initial_population(self, initial_population) -> None:
+        if initial_population is not None:
+            assert tuple(initial_population.shape) == (self.population_size, self.vector_length)
+            self.population = copy.deepcopy(initial_population)
+        else:
+            self.population = self._create_initial_population()
 
     def _create_initial_population(self) -> torch.Tensor:
         """Generate the initial population with normally distributed vectors."""
-        return torch.normal(0.0, 0.1, size=(self.population_size, self.vector_length), device=self.device)
+        return torch.normal(0.0, 0.5, size=(self.population_size, self.vector_length), device=self.device)
 
     def _mutate(self, individuals: torch.Tensor, mutation_std: float = None) -> torch.Tensor:
         """Mutate individuals by adding normally distributed noise."""
@@ -54,7 +64,7 @@ class GeneticAlgorithm:
         indices = torch.multinomial(probabilities, 2, replacement=False)
         return self.population[indices[0]], self.population[indices[1]]
 
-    def run(self) -> Tuple[torch.Tensor, float]:
+    def run(self, validity_func: Callable) -> Tuple[torch.Tensor, float]:
         """Run the Genetic Algorithm."""
         for generation in range(self.generations):
             # Evaluate fitness
@@ -75,8 +85,15 @@ class GeneticAlgorithm:
             while len(new_population) < self.population_size:
                 parent1, parent2 = self._select(fitnesses)
                 offspring1, offspring2 = self._crossover(parent1, parent2)
-                new_population.append(self._mutate(offspring1, dynamic_mutation_std))
-                new_population.append(self._mutate(offspring2, dynamic_mutation_std))
+                if validity_func is None:
+                    new_population.append(self._mutate(offspring1, dynamic_mutation_std))
+                    new_population.append(self._mutate(offspring2, dynamic_mutation_std))
+                else:
+                    assert callable(validity_func), "validity_func must be a callable object"
+                    mutation1 = self._mutate(offspring1, dynamic_mutation_std)
+                    mutation2 = self._mutate(offspring2, dynamic_mutation_std)
+                    for mutation in [mutation1, mutation2]:
+                        new_population.append(mutation) if validity_func(mutation.unsqueeze(0)) == 1 else None
 
             new_population_tensor = torch.tensor(new_population)
             self.population = new_population_tensor
