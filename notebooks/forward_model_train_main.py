@@ -34,7 +34,6 @@ def arg_parser():
     parser.add_argument('--gamma_schedule', type=float, default=0.95, help='gamma decay rate')
     parser.add_argument('--step_size', type=int, default=1, help='step size for gamma decay')
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
-    parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
     parser.add_argument('--euc_weight', type=float, default=0., help='weight for euclidean loss in GammaRad loss')
     parser.add_argument('--rad_phase_fac', type=float, default=0., help='weight for phase in radiation loss')
     parser.add_argument('--lamda', type=float, default=0.5, help='weight for radiation in gamma radiation loss')
@@ -53,7 +52,7 @@ if __name__ == "__main__":
     antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=args.batch_size, repr_mode=args.repr_mode)
     print('number of examples in train: ', len(antenna_dataset_loader.trn_folders))
     model = forward_GammaRad(radiation_channels=12, rad_range=args.rad_range)
-    loss_fn = GammaRad_loss(geo_weight=args.geo_weight, lamda=args.lamda,
+    loss_fn = GammaRad_loss(geo_weight=0., lamda=args.lamda,
                             rad_phase_fac=args.rad_phase_fac, euc_weight=args.euc_weight)
     #loss_fn = Euclidean_GammaRad_Loss(lamda=args.lamda)
     model.to(device)
