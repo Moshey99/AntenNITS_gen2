@@ -55,6 +55,7 @@ if __name__ == "__main__":
     ant_scaler_manager.try_loading_from_cache()
     best_model = None
     for idx, sample in enumerate(antenna_dataset_loader.trn_loader):
+        model.to(device)
         EMBEDDINGS, GAMMA, RADIATION, ENV, _ = sample
         embeddings, gamma, radiation, env = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
             GAMMA.to(device), RADIATION.to(device), \
