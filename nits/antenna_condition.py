@@ -63,15 +63,21 @@ class HyperEnv(nn.Module):
     def __init__(self, target_shapes: dict):
         super(HyperEnv, self).__init__()
         self.target_shapes = target_shapes
-        self.fc1_bias_gen = None
-        self.fc1_weight_gen = None
+        self.hidden_layer_bias = None
+        self.hidden_layer_weight = None
+        self.hidden_size = 32
+        self.fc1_bias_gen = nn.Linear(self.hidden_size, self.target_shapes["fc1.bias"])
+        self.fc1_weight_gen = nn.Linear(self.hidden_size, self.target_shapes["fc1.weight"])
+        self.relu = nn.ReLU()
 
     def forward(self, x):
-        if self.fc1_bias_gen is None or self.fc1_weight_gen is None:
-            self.fc1_bias_gen = nn.Linear(x.shape[1], self.target_shapes["fc1.bias"], device=x.device)
-            self.fc1_weight_gen = nn.Linear(x.shape[1], self.target_shapes["fc1.weight"], device=x.device)
-        bias = self.fc1_bias_gen(x)
-        weight = self.fc1_weight_gen(x)
+        if self.hidden_layer_weight is None or self.hidden_layer_bias is None:
+            self.hidden_layer_bias = nn.Linear(x.shape[1], self.hidden_size, device=x.device)
+            self.hidden_layer_weight = nn.Linear(x.shape[1], self.hidden_size, device=x.device)
+        x_bias = self.relu(self.hidden_layer_bias(x))
+        x_weight = self.relu(self.hidden_layer_weight(x))
+        bias = self.fc1_bias_gen(x_bias)
+        weight = self.fc1_weight_gen(x_weight)
         return {'fc1.bias': bias, 'fc1.weight': weight}
 
 
