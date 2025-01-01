@@ -139,7 +139,7 @@ def arg_parser():
     parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]', help='bounds for the values of the antenna')
     parser.add_argument('--conditional', type=bool, default=True)
     parser.add_argument('--conditional_dim', type=int, default=512, help='dimensionality of the condition')
-    parser.add_argument('cm', '--condition_mode', type=str, default="separated", help='mode of the condition backbone in NITS')
+    parser.add_argument('-cm', '--condition_mode', type=str, default="separated", help='mode of the condition backbone in NITS')
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     parser.add_argument('--run_info', type=str, default='', help='run information')
     # these arguments are less used
