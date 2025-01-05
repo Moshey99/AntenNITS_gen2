@@ -328,11 +328,12 @@ class ResidualMADE(nn.Module):
         )
         if conditional:
             assert conditioning_dim is not None, 'Dimension of condition variables must be specified.'
-            if condition_mode == "separated":
+            if condition_mode == "separated" or condition_mode == "separated_basic":
                 self.spectrum_condition_backbone = GammaRadiationCondition(condition_dim=conditioning_dim)
                 self.spectrum_condition_layers = nn.Sequential(self.spectrum_condition_backbone, nn.ELU(),
                                                                nn.Linear(conditioning_dim, self.spec_dim))
-                self.environment_condition_layers = EnvironmentCondition(output_dim=hidden_dim - self.spec_dim)
+                if condition_mode == "separated":
+                    self.environment_condition_layers = EnvironmentCondition(output_dim=hidden_dim - self.spec_dim)
             elif condition_mode == "hyper":
                 self.condition_features_backbone = GammaRadHyperEnv(shapes={"fc1.inp_dim": conditioning_dim, "fc1.out_dim": hidden_dim})
         self.blocks = nn.ModuleList(
@@ -373,6 +374,10 @@ class ResidualMADE(nn.Module):
                 spectrum_condition = self.spectrum_condition_layers((cond_gamma, cond_rad))
                 environment_condition = self.environment_condition_layers(cond_env)
                 condition_features = torch.cat((spectrum_condition, environment_condition), dim=1)
+            elif self.condition_mode == "separated_basic":
+                dropped_features = cond_env.shape[1] - 32  # to fit sizes
+                spectrum_condition = self.spectrum_condition_layers((cond_gamma, cond_rad))[:, dropped_features:]
+                condition_features = torch.cat((spectrum_condition, cond_env), dim=1)
             elif self.condition_mode == "hyper":
                 condition_features = self.condition_features_backbone(cond_gamma, cond_rad, cond_env)
         return condition_features
