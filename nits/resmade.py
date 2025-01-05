@@ -311,7 +311,8 @@ class ResidualMADE(nn.Module):
                  conditional=False, conditioning_dim=None, condition_mode=None, activation=F.relu, use_batch_norm=False,
                  dropout_probability=None, zero_initialization=True, weight_norm=False):
         super().__init__()
-        assert condition_mode in ['hyper', 'separated'], "condition_mode must be 'hyper' or 'separated'"
+        supported_conditions = ['hyper', 'separated', 'separated_basic']
+        assert condition_mode in supported_conditions, f"condition_mode must be in {supported_conditions}"
         self.input_dim = input_dim
         self.output_dim_multiplier = output_dim_multiplier
         assert hidden_dim > 32, 'Hidden dimension must be greater than 32.'
