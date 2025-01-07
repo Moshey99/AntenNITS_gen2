@@ -31,7 +31,9 @@ from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from shapely.geometry import Polygon
 
-EXAMPLE_FOLDER = os.path.join(Path(__file__).parent, 'EXAMPLE')
+MODEL_TYPE = 5
+assert MODEL_TYPE in [3, 5], 'MODEL_TYPE must be either 3 or 5.'
+EXAMPLE_FOLDER = os.path.join(Path(__file__).parent, 'EXAMPLE', f'model_{MODEL_TYPE}')
 
 
 class DataPreprocessor:
@@ -774,7 +776,7 @@ def env_to_dict_representation(env: torch.Tensor):
     all_env_dicts = []
     env = env.clone().detach().cpu().numpy()
     for i in range(env.shape[0]):
-        env_i = np.round(np.append([3], env[i]), 2)
+        env_i = np.round(np.append([MODEL_TYPE], env[i]), 2)
         env_i_dict = {key: val for key, val in zip(example.keys(), env_i)}
         all_env_dicts.append(env_i_dict)
     return np.array(all_env_dicts)
