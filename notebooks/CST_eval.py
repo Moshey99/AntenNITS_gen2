@@ -6,6 +6,18 @@ from forward_model_evaluate_main import plot_condition
 import matplotlib.pyplot as plt
 
 
+def remove_filter_tag(filter_tag: str):
+    to_remove = ''
+    if filter_tag.__contains__('nn'):
+        to_remove = r'_nn'
+    elif filter_tag.__contains__('grade'):
+        to_remove = r'_grade_\d+'
+    elif filter_tag.__contains__('shahar'):
+        to_remove = r'_shahar'
+
+    return to_remove
+
+
 if __name__ == "__main__":
     filter_tag = 'grade_0'  # can be also 'nn' or 'grade_0'
     all_gamma_stats, all_radiation_stats = [], []
@@ -37,7 +49,8 @@ if __name__ == "__main__":
                                        rates=[4, 2]).squeeze()
         cst_rad = torch.tensor(AntennaDataSet.clip_radiation(cst_rad)).float()
         cst_name = os.path.basename(folder)
-        addon_to_remove = r'_nn' if filter_tag.__contains__('nn') else r'_grade_\d+'
+        addon_to_remove = remove_filter_tag(filter_tag)
+
         antenna_name = re.sub(addon_to_remove, '', cst_name)
         print('Working on CST antenna:', cst_name, 'Matching test case:', antenna_name)
         gt_gam = downsample_gamma(np.load(os.path.join(data_path, antenna_name, 'gamma.npy'))[np.newaxis],
@@ -77,26 +90,26 @@ if __name__ == "__main__":
                     both_worse_counter += 1
         gamma_stats_buffer.append(gamma_stats)
         rad_stats_buffer.append(rad_stats)
-    # if len(gamma_stats_buffer) > 0:
-    #     best_gamma_idx_in_buffer = torch.stack(gamma_stats_buffer)[:, 0].argmin()
-    #     best_rad_idx_in_buffer = torch.stack(rad_stats_buffer)[:, 0].argmin()
-    #     best_gamma_stats = gamma_stats_buffer[best_gamma_idx_in_buffer]
-    #     best_rad_stats = rad_stats_buffer[best_rad_idx_in_buffer]
-    #     gamma_stats_buffer = []
-    #     rad_stats_buffer = []
-    #     all_gamma_stats.append(best_gamma_stats)
-    #     all_radiation_stats.append(best_rad_stats)
-    #     total_counter += 1
-    #     if best_gamma_stats[0] < gamma_th:
-    #         gamma_only_improve_counter += 1
-    #     if best_rad_stats[0] < rad_th:
-    #         rad_only_improve_counter += 1
-    #     if best_gamma_stats[0] < gamma_th and best_rad_stats[0] < rad_th:
-    #         both_improve_counter += 1
-    #     if best_gamma_stats[0] < gamma_th / 2 or best_rad_stats[0] < rad_th / 2:
-    #         both_big_improve_counter += 1
-    #     if best_gamma_stats[0] > gamma_th and best_rad_stats[0] > rad_th:
-    #         both_worse_counter += 1
+    if len(gamma_stats_buffer) > 0:
+        best_gamma_idx_in_buffer = torch.stack(gamma_stats_buffer)[:, 0].argmin()
+        best_rad_idx_in_buffer = torch.stack(rad_stats_buffer)[:, 0].argmin()
+        best_gamma_stats = gamma_stats_buffer[best_gamma_idx_in_buffer]
+        best_rad_stats = rad_stats_buffer[best_rad_idx_in_buffer]
+        gamma_stats_buffer = []
+        rad_stats_buffer = []
+        all_gamma_stats.append(best_gamma_stats)
+        all_radiation_stats.append(best_rad_stats)
+        total_counter += 1
+        if best_gamma_stats[0] < gamma_th:
+            gamma_only_improve_counter += 1
+        if best_rad_stats[0] < rad_th:
+            rad_only_improve_counter += 1
+        if best_gamma_stats[0] < gamma_th and best_rad_stats[0] < rad_th:
+            both_improve_counter += 1
+        if best_gamma_stats[0] < gamma_th / 2 or best_rad_stats[0] < rad_th / 2:
+            both_big_improve_counter += 1
+        if best_gamma_stats[0] > gamma_th and best_rad_stats[0] > rad_th:
+            both_worse_counter += 1
 
     print(f'Total antennas: {total_counter}')
     print(f'Gamma only improvement: {gamma_only_improve_counter}')

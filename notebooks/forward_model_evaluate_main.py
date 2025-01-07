@@ -38,19 +38,17 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor],
     ax11.set_ylim([-np.pi, np.pi])
     ax11.set_ylabel('phase', color='r')
     ax1.set_xlabel('frequency [MHz]')
-    rad_first_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 0])**2 + radiation_mag_to_linear(rad[0, 1])**2))
-    rad_second_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 2])**2 + radiation_mag_to_linear(rad[0, 3])**2))
-    rad_third_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(rad[0, 4])**2 + radiation_mag_to_linear(rad[0, 5])**2))
+    rad_first_freq, rad_second_freq, rad_third_freq = polarized_to_total_radiation_mag(rad)[0]
     # Plot radiation patterns
     if plot_type == '2d':
         # 2D plots using imshow
-        ax2.imshow(rad_first_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
+        ax2.imshow(rad_first_freq.cpu().detach().numpy(), vmin=-15, vmax=5, cmap='jet')
         ax2.set_xticks([])
         ax2.set_yticks([])
-        ax3.imshow(rad_second_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
+        ax3.imshow(rad_second_freq.cpu().detach().numpy(), vmin=-15, vmax=5, cmap='jet')
         ax3.set_xticks([])
         ax3.set_yticks([])
-        ax4.imshow(rad_third_freq.cpu().detach().numpy(), vmin=-10, vmax=5, cmap='jet')
+        ax4.imshow(rad_third_freq.cpu().detach().numpy(), vmin=-15, vmax=5, cmap='jet')
         ax4.set_xticks([])
         ax4.set_yticks([])
 

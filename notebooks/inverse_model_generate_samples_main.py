@@ -60,8 +60,9 @@ parser.add_argument('-bm', '--bound_multiplier', type=int, default=1)
 parser.add_argument('-w', '--step_weights', type=list_str_to_list, default='[1]',
                     help='Weights for each step of multistep NITS')
 parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]')
-parser.add_argument('--conditional', type=bool, default=True)
+parser.add_argument('--no-conditional', action='store_false', dest='conditional', help='Set to disable conditional mode')
 parser.add_argument('--conditional_dim', type=int, default=512)
+parser.add_argument('-cm', '--condition_mode', type=str, default="separated", help='mode of the condition backbone in NITS')
 parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
 parser.add_argument('--num_samples', type=int, default=10)
 parser.add_argument('--num_skip', type=int, default=0)
@@ -124,7 +125,9 @@ model = Model(
     use_batch_norm=use_batch_norm,
     nits_input_dim=nits_input_dim,
     conditional=conditional,
-    conditional_dim=args.conditional_dim)
+    conditional_dim=args.conditional_dim,
+    condition_mode=args.condition_mode,
+)
 
 shadow = Model(
     d=d,
@@ -135,7 +138,9 @@ shadow = Model(
     use_batch_norm=use_batch_norm,
     nits_input_dim=nits_input_dim,
     conditional=conditional,
-    conditional_dim=args.conditional_dim)
+    conditional_dim=args.conditional_dim,
+    condition_mode=args.condition_mode,
+)
 
 model = EMA(model, shadow, decay=args.polyak_decay).to(device)
 model.eval()
@@ -162,9 +167,9 @@ with torch.no_grad():
         print('Working on antenna: ', name[0])
         # plot_condition((gamma, rad))
         # plt.show()
-        # condition = (gamma, rad, env)
-        # print(f'sampling {args.num_samples} samples for antenna: ', name[0])
-        # start = time.time()
-        # smp = model.shadow.sample(num_samples, device, condition=condition)
-        # print(f'sampled {num_samples} samples in {time.time() - start} seconds.')
-        # np.save(os.path.join(output_folder, f'sample_{name[0]}.npy'), smp.detach().cpu().numpy())
+        condition = (gamma, rad, env)
+        print(f'sampling {args.num_samples} samples for antenna: ', name[0])
+        start = time.time()
+        smp = model.shadow.sample(num_samples, device, condition=condition)
+        print(f'sampled {num_samples} samples in {time.time() - start} seconds.')
+        np.save(os.path.join(output_folder, f'sample_{name[0]}.npy'), smp.detach().cpu().numpy())

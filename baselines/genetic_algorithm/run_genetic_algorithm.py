@@ -62,24 +62,6 @@ class FitnessFunction:
         return torch.tensor(all_fitnesses)
 
 
-class AntValidityFunction:
-    def __init__(
-        self,
-        sample_path: str,
-        ant_scaler: ScalerManager
-    ) -> None:
-        args.path = sample_path
-        args.ant_scaler = ant_scaler
-
-    def __call__(self, ant: torch.Tensor) -> bool:
-        env_og_rel_repr = env_to_dict_representation(
-            torch.tensor(np.load(os.path.join(args.path, 'environment.npy'))[np.newaxis]))[0]
-        ant_abs = args.ant_scaler.scaler.inverse(ant)
-        ant_og_abs_repr = ant_to_dict_representation(ant_abs)[0]
-        ant_og_rel_repr = ant_abs2rel(ant_og_abs_repr, env_og_rel_repr)
-        return bool(check_ant_validity(ant_og_rel_repr, env_og_rel_repr))
-
-
 if __name__ == "__main__":
     all_gamma_stats, all_radiation_stats = [], []
     plot_GT_vs_pred = False

@@ -137,8 +137,9 @@ def arg_parser():
     parser.add_argument('-l', '--learning_rate', type=float, default=2e-4)
     parser.add_argument('-p', '--dropout', type=float, default=-1.0, help='dropout probability')
     parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]', help='bounds for the values of the antenna')
-    parser.add_argument('--conditional', type=bool, default=True)
+    parser.add_argument('--no-conditional', action='store_false', dest='conditional', help='Set to disable conditional mode')
     parser.add_argument('--conditional_dim', type=int, default=512, help='dimensionality of the condition')
+    parser.add_argument('-cm', '--condition_mode', type=str, default="separated", help='mode of the condition backbone in NITS')
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     parser.add_argument('--run_info', type=str, default='', help='run information')
     # these arguments are less used
@@ -169,7 +170,7 @@ if __name__ == "__main__":
     model_names = []
     for lr, hidden_dim, nr_blocks, polyak_decay, bs in itertools.product(lr_grid, hidden_dim_grid, nr_blocks_grid,
                                                                          polyak_decay_grid, batch_size_grid):
-        model_extra_string = f'lr_{lr}_hd_{hidden_dim}_nr_{nr_blocks}_pd_{polyak_decay}_bs_{bs}_info_{args.run_info}'
+        model_extra_string = f'lr_{lr}_hd_{hidden_dim}_nr_{nr_blocks}_pd_{polyak_decay}_bs_{bs}_info_{args.run_info}_cm_{args.condition_mode}'
         model_names.append(model_extra_string)
         print(model_extra_string)
         args.learning_rate = lr
@@ -227,7 +228,9 @@ if __name__ == "__main__":
             zero_initialization=zero_initialization,
             nits_input_dim=nits_input_dim,
             conditional=conditional,
-            conditional_dim=args.conditional_dim)
+            conditional_dim=args.conditional_dim,
+            condition_mode=args.condition_mode,
+        )
 
         shadow = Model(
             d=d,
@@ -240,7 +243,9 @@ if __name__ == "__main__":
             zero_initialization=zero_initialization,
             nits_input_dim=nits_input_dim,
             conditional=conditional,
-            conditional_dim=args.conditional_dim)
+            conditional_dim=args.conditional_dim,
+            condition_mode=args.condition_mode
+        )
 
         model = EMA(model, shadow, decay=args.polyak_decay).to(device)
         if len(devices) > 1:

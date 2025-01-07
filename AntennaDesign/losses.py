@@ -146,7 +146,8 @@ class radiation_loss_dB(nn.Module):
 
 
 class GammaRad_loss(nn.Module):
-    def __init__(self, gamma_loss_fn=None, radiation_loss_fn=None, lamda=1.0, rad_phase_fac=0.0, geo_weight=1e-4, euc_weight=1e-2):
+    def __init__(self, gamma_loss_fn=None, radiation_loss_fn=None, lamda=1.0, rad_phase_fac=0.0, geo_weight=0.,
+                 euc_weight=1e-2):
         super(GammaRad_loss, self).__init__()
         if gamma_loss_fn is None:
             self.gamma_loss_fn = gamma_loss_dB()
@@ -154,20 +155,24 @@ class GammaRad_loss(nn.Module):
             self.radiation_loss_fn = radiation_loss_dB(mag_loss='huber', rad_phase_factor=rad_phase_fac)
         self.lamda = lamda
         self.euc_weight = euc_weight
+        self.geo_weight = geo_weight
 
     def forward(self, pred, target):
-        gamma_pred, radiation_pred, geo_pred = pred
+        gamma_pred, radiation_pred, ant_pred = pred
         gamma_target, radiation_target = target
         gamma_loss = self.gamma_loss_fn(gamma_pred, gamma_target)
         euc_gamma_loss = Euclidean_Gamma_Loss()(gamma_pred, gamma_target)
         radiation_loss = self.radiation_loss_fn(radiation_pred, radiation_target)
         euc_rad_loss = Euclidean_Radiation_Loss()(radiation_pred, radiation_target)
-        #print(f'Gamma Loss: {gamma_loss}, Radiation Loss: {radiation_loss}')
-        loss = (1 - self.lamda) * (gamma_loss + self.euc_weight * euc_gamma_loss) + self.lamda * (radiation_loss + self.euc_weight * euc_rad_loss)
+        loss = (1 - self.lamda) * (gamma_loss + self.euc_weight * euc_gamma_loss) + self.lamda * (
+                    radiation_loss + self.euc_weight * euc_rad_loss) + self.geo_weight * self.geometry_loss(ant_pred)
         return loss
 
-    def geometry_loss(self, geo):
-        return self.geo_weight * torch.mean(geo)
+    @staticmethod
+    def geometry_loss(ant: torch.Tensor):
+        loss = ant.abs().mean()
+        print(f'ant_loss: {loss}')
+        return loss
 
 
 class Euclidean_Gamma_Loss(nn.Module):
@@ -217,4 +222,3 @@ class Euclidean_GammaRad_Loss(nn.Module):
         radiation_loss = self.rad_loss(radiation_pred, radiation_target)
         loss = gamma_loss + self.lamda * radiation_loss
         return loss
-

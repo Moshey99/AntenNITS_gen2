@@ -608,6 +608,15 @@ def produce_gamma_stats(GT_gamma, predicted_gamma, dataset_type='linear', to_pri
     return avg_diff, max_diff, avg_diff_phase, max_diff_phase
 
 
+def polarized_to_total_radiation_mag(radiation: torch.Tensor):
+    assert len(radiation.shape) == 4, "Radiation must be of shape (B, C, H, W)"
+    rad_first_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(radiation[:, 0])**2 + radiation_mag_to_linear(radiation[:, 1])**2))
+    rad_second_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(radiation[:, 2])**2 + radiation_mag_to_linear(radiation[:, 3])**2))
+    rad_third_freq = radiation_mag_to_dB(torch.sqrt(radiation_mag_to_linear(radiation[:, 4])**2 + radiation_mag_to_linear(radiation[:, 5])**2))
+    total_radiation = torch.stack((rad_first_freq, rad_second_freq, rad_third_freq), dim=1)
+    return total_radiation
+
+
 def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
     msssim = MSSSIM()
     if type(predicted_radiation) == tuple:
@@ -615,6 +624,7 @@ def produce_radiation_stats(predicted_radiation, gt_radiation, to_print=True):
         _, gt_radiation = gt_radiation
     sep = predicted_radiation.shape[1] // 2
     pred_rad_mag, gt_rad_mag = predicted_radiation[:, :sep], gt_radiation[:, :sep]
+    #pred_rad_mag, gt_rad_mag = polarized_to_total_radiation_mag(pred_rad_mag), polarized_to_total_radiation_mag(gt_rad_mag)
     pred_rad_phase, gt_rad_phase = predicted_radiation[:, sep:], gt_radiation[:, sep:]
     abs_diff_mag = torch.abs(pred_rad_mag - gt_rad_mag)
     respective_diff = torch.where(torch.abs(gt_rad_mag) > 1.5, torch.div(abs_diff_mag, torch.abs(gt_rad_mag)) * 100, 0)
@@ -801,6 +811,24 @@ def ant_abs2rel(ant_parameters_abs: dict, model_parameters: dict):
         if key == 'fx':
             ant_parameters_rel[key] = np.round(value / Sy, decimals=2)
     return ant_parameters_rel
+
+
+class AntValidityFunction:
+    def __init__(
+        self,
+        sample_path: str,
+        ant_scaler: ScalerManager
+    ) -> None:
+        self.path = sample_path
+        self.ant_scaler = ant_scaler
+
+    def __call__(self, ant: torch.Tensor) -> bool:
+        env_og_rel_repr = env_to_dict_representation(
+            torch.tensor(np.load(os.path.join(self.path, 'environment.npy'))[np.newaxis]))[0]
+        ant_abs = self.ant_scaler.scaler.inverse(ant)
+        ant_og_abs_repr = ant_to_dict_representation(ant_abs)[0]
+        ant_og_rel_repr = ant_abs2rel(ant_og_abs_repr, env_og_rel_repr)
+        return bool(check_ant_validity(ant_og_rel_repr, env_og_rel_repr))
 
 
 class data_linewidth_plot:
