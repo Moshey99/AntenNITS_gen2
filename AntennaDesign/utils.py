@@ -688,9 +688,15 @@ def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
 
 
 def check_ant_validity(ant_parameters, model_parameters) -> int:
-    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
-          - model_parameters['feed_length'] / 2)
-    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
+    if int(model_parameters['type']) == 3:
+        Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters[
+            'w'] / 2
+              - model_parameters['feed_length'] / 2)
+        Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    else:
+        Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sz'] - ant_parameters['w']
     wings = ['w1', 'w2', 'q1', 'q2']
     for key in ant_parameters:
         if ant_parameters[key] < 0: return 0
@@ -737,20 +743,23 @@ def check_ant_validity(ant_parameters, model_parameters) -> int:
 
 def model_rel2abs(model_parameters):
     model_parameters_abs = model_parameters.copy()
-    axes = ['x', 'y', 'z']
-    dimensions = ['width', 'height', 'length']
-
-    elements = ['a', 'b', 'c', 'd']
-    for e in elements:
-        for i_axis, axis in enumerate(axes):
-            model_parameters_abs[e + 'd' + axis] = model_parameters[e + 'd' + axis] * model_parameters[
-                dimensions[i_axis]]
-            model_parameters_abs[e + 'r' + axis] = model_parameters[e + 'r' + axis] * model_parameters[e + 'd' + axis] * \
-                                                   model_parameters[dimensions[i_axis]]
-    model_parameters_abs['a'] = model_parameters['a'] * model_parameters['width']
-    model_parameters_abs['b'] = model_parameters['b'] * model_parameters['height']
-    model_parameters_abs['c'] = model_parameters['c'] * model_parameters['height']
-    # model_parameters_abs['d'] = model_parameters['d'] * model_parameters['height']
+    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
+    if int(model_parameters['type']) == 3:
+        axes = ['x', 'y', 'z']
+        dimensions = ['width', 'height', 'length']
+        elements = ['a', 'b', 'c', 'd']
+        for e in elements:
+            for i_axis, axis in enumerate(axes):
+                model_parameters_abs[e + 'd' + axis] = model_parameters[e + 'd' + axis] * model_parameters[
+                    dimensions[i_axis]]
+                model_parameters_abs[e + 'r' + axis] = model_parameters[e + 'r' + axis] * model_parameters[e + 'd' + axis] * \
+                                                       model_parameters[dimensions[i_axis]]
+        model_parameters_abs['a'] = model_parameters['a'] * model_parameters['width']
+        model_parameters_abs['b'] = model_parameters['b'] * model_parameters['height']
+        model_parameters_abs['c'] = model_parameters['c'] * model_parameters['height']
+    else:
+        model_parameters_abs['Lz'] = model_parameters['Sz'] * model_parameters_abs['Lz']
+        model_parameters_abs['Ly'] = model_parameters['Sy'] * model_parameters_abs['Ly']
     return model_parameters_abs
 
 
@@ -784,9 +793,14 @@ def env_to_dict_representation(env: torch.Tensor):
 
 def ant_rel2abs(ant_parameters: dict, model_parameters: dict):
     ant_parameters_abs = ant_parameters.copy()
-    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
-          - model_parameters['feed_length'] / 2)
-    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
+    if int(model_parameters["type"]) == 3:
+        Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
+              - model_parameters['feed_length'] / 2)
+        Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    else:
+        Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sz'] - ant_parameters['w']
     for key, value in ant_parameters.items():
         if len(key) == 4:
             if key[2] == 'z':
@@ -800,10 +814,15 @@ def ant_rel2abs(ant_parameters: dict, model_parameters: dict):
 
 def ant_abs2rel(ant_parameters_abs: dict, model_parameters: dict):
     ant_parameters_rel = ant_parameters_abs.copy()
-    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters_abs[
-        'w'] / 2
-          - model_parameters['feed_length'] / 2)
-    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters_abs['w']
+    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
+    if int(model_parameters["type"]) == 3:
+        Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters_abs[
+            'w'] / 2
+              - model_parameters['feed_length'] / 2)
+        Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters_abs['w']
+    else:
+        Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sz'] - ant_parameters['w']
     for key, value in ant_parameters_abs.items():
         if len(key) == 4:
             if key[2] == 'z':
@@ -868,9 +887,15 @@ def plot_antenna_figure(model_parameters, ant_parameters, alpha=1):
     plt.ioff()
     f, ax1 = plt.subplots()
     wings = ['w1', 'w2', 'q1', 'q2']
-    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
-          - model_parameters['feed_length'] / 2)
-    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
+    if int(model_parameters["type"]) == 3:
+        Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
+              - model_parameters['feed_length'] / 2)
+        Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    else:
+        Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sz'] - ant_parameters['w']
+
     data_linewidth_plot([Sy * ant_parameters['fx'], Sy * ant_parameters['fx']],
                         [-10, 10], linewidth=ant_parameters['w'] + 0.1, alpha=alpha, color='k')
     for wing in wings:
