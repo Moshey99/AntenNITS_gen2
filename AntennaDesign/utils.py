@@ -46,13 +46,10 @@ class DataPreprocessor:
             os.makedirs(destination_path, exist_ok=True)
 
     def antenna_preprocessor(self, debug=False):
-        scaler = standard_scaler()
-        scaler_manager = ScalerManager(path=os.path.join(self.destination_path, 'ant_scaler.pkl'), scaler=scaler)
         ant_path = os.path.join(EXAMPLE_FOLDER, 'ant_parameters.pickle')
         with open(ant_path, 'rb') as f:
             example = pickle.load(f)
         print('Preprocessing antennas')
-        all_ants = []
         folder_path = self.folder_path
         for idx, name in enumerate(sorted(os.listdir(folder_path))):
             print('working on antenna number:', name, f'({idx})', 'out of:', self.num_data_points)
@@ -61,23 +58,17 @@ class DataPreprocessor:
                 antenna_dict = pickle.load(f)
             antenna_vals = [antenna_dict[key] for key in example.keys()]
             antenna = np.array(antenna_vals)
-            all_ants.append(antenna)
             if not debug:
                 output_folder = os.path.join(self.destination_path, name)
                 os.makedirs(output_folder, exist_ok=True)
                 np.save(os.path.join(output_folder, 'antenna.npy'), antenna)
-        scaler_manager.fit(np.array(all_ants))
-        scaler_manager.dump()
         print(f'Antennas saved successfully')
 
     def environment_preprocessor(self, debug=False):
         print('Preprocessing environments')
-        scaler = standard_scaler()
-        scaler_manager = ScalerManager(path=os.path.join(self.destination_path, 'env_scaler.pkl'), scaler=scaler)
         env_path = os.path.join(EXAMPLE_FOLDER, 'model_parameters.pickle')
         with open(env_path, 'rb') as f:
             example = pickle.load(f)
-        all_envs = []
         folder_path = self.folder_path
         for idx, name in enumerate(sorted(os.listdir(folder_path))):
             print('working on antenna number:', name, f'({idx})', 'out of:', self.num_data_points)
@@ -91,13 +82,10 @@ class DataPreprocessor:
                 env_dict['plane'] = 0 if plane == 'xz' else 1
                 env_vals = [env_dict[key] for key in example.keys()]
                 assert np.all([type(value) != list for value in env_vals]), 'ERROR. List in Environments values'
-                all_envs.append(env_vals)
                 if not debug:
                     output_folder = os.path.join(self.destination_path, name)
                     os.makedirs(output_folder, exist_ok=True)
                     np.save(os.path.join(output_folder, 'environment.npy'), np.array(env_vals))
-        scaler_manager.fit(np.array(all_envs))
-        scaler_manager.dump()
         print(f'Environments saved successfully')
 
     @staticmethod
