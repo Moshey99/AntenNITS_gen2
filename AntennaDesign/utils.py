@@ -696,7 +696,7 @@ def check_ant_validity(ant_parameters, model_parameters) -> int:
         Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
     else:
         Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
-        Sy = model_parameters['Sz'] - ant_parameters['w']
+        Sy = model_parameters['Sy'] - ant_parameters['w']
     wings = ['w1', 'w2', 'q1', 'q2']
     for key in ant_parameters:
         if ant_parameters[key] < 0: return 0
@@ -772,6 +772,9 @@ def ant_to_dict_representation(ant: torch.Tensor):
     ant = ant.clone().detach().cpu().numpy()
     for i in range(ant.shape[0]):
         ant_i = np.round(ant[i], 2)
+        assert len(ant_i) == len(example), 'length of the antenna does not match the number of example,' \
+                                           ' so antenna cannot be transformed to models dictionary representation.' \
+                                           'Check that the model type is correct and represents your data.'
         ant_i_dict = {key: val for key, val in zip(example.keys(), ant_i)}
         all_ant_dicts.append(ant_i_dict)
     return np.array(all_ant_dicts)
@@ -786,6 +789,9 @@ def env_to_dict_representation(env: torch.Tensor):
     env = env.clone().detach().cpu().numpy()
     for i in range(env.shape[0]):
         env_i = np.round(np.append([MODEL_TYPE], env[i]), 2)
+        assert len(env_i) == len(example), 'length of the environment does not match the number of example,' \
+                                           ' so environment cannot be transformed to models dictionary representation.' \
+                                           'Check that the model type is correct and represents your data.'
         env_i_dict = {key: val for key, val in zip(example.keys(), env_i)}
         all_env_dicts.append(env_i_dict)
     return np.array(all_env_dicts)
@@ -800,7 +806,7 @@ def ant_rel2abs(ant_parameters: dict, model_parameters: dict):
         Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
     else:
         Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
-        Sy = model_parameters['Sz'] - ant_parameters['w']
+        Sy = model_parameters['Sy'] - ant_parameters['w']
     for key, value in ant_parameters.items():
         if len(key) == 4:
             if key[2] == 'z':
@@ -822,7 +828,7 @@ def ant_abs2rel(ant_parameters_abs: dict, model_parameters: dict):
         Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters_abs['w']
     else:
         Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
-        Sy = model_parameters['Sz'] - ant_parameters['w']
+        Sy = model_parameters['Sy'] - ant_parameters['w']
     for key, value in ant_parameters_abs.items():
         if len(key) == 4:
             if key[2] == 'z':
@@ -894,7 +900,7 @@ def plot_antenna_figure(model_parameters, ant_parameters, alpha=1):
         Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
     else:
         Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
-        Sy = model_parameters['Sz'] - ant_parameters['w']
+        Sy = model_parameters['Sy'] - ant_parameters['w']
 
     data_linewidth_plot([Sy * ant_parameters['fx'], Sy * ant_parameters['fx']],
                         [-10, 10], linewidth=ant_parameters['w'] + 0.1, alpha=alpha, color='k')
