@@ -74,7 +74,7 @@ if __name__ == "__main__":
     while keep_training:
         if epoch % 10 == 0 and epoch > 0:
             print(f'Saving model at epoch {epoch}')
-            torch.save(model.state_dict(), os.path.join(checkpoints_path, f'forward_epoch_{epoch}_lr_{args.lr}_bs_{args.batch_size}.pth'))
+            torch.save(model.state_dict(), os.path.join(checkpoints_path, f'forward_epoch_{epoch}_lr_{args.lr}_bs_{args.batch_size}_lamda_{args.lamda}_euc_{args.euc_weight}.pth'))
 
         print(f'Starting Epoch: {epoch}. Patience: {patience}')
         model.train()
@@ -112,8 +112,9 @@ if __name__ == "__main__":
                 geometry = torch.cat((ant, env), dim=1)
                 target = (gamma, radiation)
                 gamma_pred, rad_pred = model(geometry)
-                produce_gamma_stats(gamma, gamma_to_dB(gamma_pred), dataset_type='dB', to_print=True)
-                produce_radiation_stats(radiation, rad_pred, to_print=True)
+                if idx % 20 == 0:
+                    produce_gamma_stats(gamma, gamma_to_dB(gamma_pred), dataset_type='dB', to_print=True)
+                    produce_radiation_stats(radiation, rad_pred, to_print=True)
                 output = (gamma_pred, rad_pred, geometry)
                 loss = loss_fn(output, target)
                 val_loss += loss.item()
@@ -125,13 +126,13 @@ if __name__ == "__main__":
                 patience = args.patience
             else:
                 patience -= 1
-            if patience <= np.ceil(args.patience / 2):
+            if patience <= np.ceil(args.patience - 2):
                 scheduler.step()
             if patience == 0:
                 print('Early stopping - stayed at the same loss for too long.')
                 keep_training = False
             train_loss = 0
-    best_model_checkpoint_path = os.path.join(checkpoints_path, f'forward_best_dict_bestloss_{best_loss}_lr_{args.lr}_bs_{args.batch_size}_lamda_{args.lamda}.pth')
+    best_model_checkpoint_path = os.path.join(checkpoints_path, f'forward_best_dict_bestloss_{best_loss}_lr_{args.lr}_bs_{args.batch_size}_lamda_{args.lamda}_euc_{args.euc_weight}.pth')
     torch.save(best_model.state_dict(), best_model_checkpoint_path)
     print('Training finished.')
     print(f'Best loss: {best_loss}')
