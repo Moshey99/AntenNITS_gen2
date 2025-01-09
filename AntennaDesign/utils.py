@@ -257,6 +257,7 @@ class PCAWrapper:
 class AntennaDataSet(torch.utils.data.Dataset):
     def __init__(self, antenna_folders: list[str], repr_mode: str, pca_wrapper: PCAWrapper, try_cache: bool):
         assert repr_mode in ['abs', 'rel', 'both'], 'Invalid dataset representation mode'
+        assert len(antenna_folders) > 0, 'Antenna folders must have at least one element, not empty.'
         self.repr_mode = repr_mode
         self.antenna_folders = antenna_folders
         self.len = len(antenna_folders)
@@ -433,7 +434,7 @@ class AntennaDataSetsLoader:
         tst_len = len(all_folders) - trn_len - val_len
         self.trn_folders = all_folders[:trn_len]
         self.val_folders = all_folders[trn_len:trn_len + val_len]
-        self.tst_folders = all_folders[trn_len + val_len:]
+        self.tst_folders = all_folders[trn_len + val_len:] if tst_len > 0 else [self.val_folders[0]]
 
     def load_test_data(self, test_path):
         assert os.path.exists(test_path), f'Test path does not exist in {test_path}'
