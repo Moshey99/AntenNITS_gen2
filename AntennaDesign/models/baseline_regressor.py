@@ -102,11 +102,11 @@ class small_deeper_baseline_forward_model(nn.Module):
         x = self.elu(self.fc2(x))
         x = self.elu(self.fc3(x))
         x = self.fc4(x)
-
+        sep = x.shape[1] // 2
         # Output processing
-        mag = self.sigmoid(x[:, :x.shape[1] // 2])
+        mag = self.sigmoid(x[:, :sep])
         mag = torch.clamp(mag, self.eps, 1)
-        phase = self.sigmoid(x[:, x.shape[1] // 2:]) * 2 * torch.pi - torch.pi  # phase is between -pi and pi
+        phase = self.sigmoid(x[:, sep:]) * 2 * torch.pi - torch.pi  # phase is between -pi and pi
         output = torch.cat((mag, phase), dim=1)
 
         return output
