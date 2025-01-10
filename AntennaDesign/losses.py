@@ -112,7 +112,8 @@ class gamma_loss_dB(nn.Module):
         mag_loss, phase_loss = self.dB_magnitude_loss(pred_magnitude_db, target_magnitude), self.phase_loss(pred_phase,
                                                                                                             target_phase)
         loss = mag_loss + phase_loss
-        return loss + smooth_loss_mag + smooth_loss_phase
+        # return loss + smooth_loss_mag + smooth_loss_phase
+        return loss
 
 
 class radiation_loss_dB(nn.Module):
@@ -172,7 +173,6 @@ class GammaRad_loss(nn.Module):
     @staticmethod
     def geometry_loss(ant: torch.Tensor):
         loss = ant.abs().mean()
-        print(f'ant_loss: {loss}')
         return loss
 
 
