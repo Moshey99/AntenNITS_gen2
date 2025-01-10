@@ -31,6 +31,7 @@ def arg_parser():
                 default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
     parser.add_argument('--batch_size', type=int, default=12)
     parser.add_argument('--lr', type=float, default=1e-3, help='initial learning rate')
+    parser.add_argument('--weight_decay', type=float, default=0.001)
     parser.add_argument('--gamma_schedule', type=float, default=0.95, help='gamma decay rate')
     parser.add_argument('--step_size', type=int, default=1, help='step size for gamma decay')
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
@@ -56,7 +57,7 @@ if __name__ == "__main__":
                             rad_phase_fac=args.rad_phase_fac, euc_weight=args.euc_weight)
     #loss_fn = Euclidean_GammaRad_Loss(lamda=args.lamda)
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_schedule)
     keep_training = True
     epoch = 0
