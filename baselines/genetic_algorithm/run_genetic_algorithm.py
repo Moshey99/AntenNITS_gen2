@@ -116,18 +116,18 @@ if __name__ == "__main__":
                 vector_length=40,
                 initial_population=nearest_neighbors[:population_size],
                 population_size=population_size,
-                generations=30,
-                mutation_stddev=0.02,
+                generations=40,
+                mutation_stddev=0.04,
                 fitness_function=fitness_func,
             )
             best_ant, best_loss = ga.run(validity_function)
             with open(os.path.join(output_folder, f'ant_{name[0]}.pickle'),
                       'wb') as ant_handle:
                 env_og_rel_repr = env_to_dict_representation(
-                    torch.tensor(np.load(os.path.join(args.path, 'environment.npy'))[np.newaxis]))[0]
+                    torch.tensor(np.load(os.path.join(sample_path, name[0], 'environment.npy'))[np.newaxis]))[0]
                 with open(os.path.join(output_folder, f'env_{name[0]}.pickle'), 'wb') as env_handle:
                     pickle.dump(env_og_rel_repr, env_handle)
-                best_ant_abs = args.ant_scaler.scaler.inverse(best_ant)
+                best_ant_abs = ant_scaler_manager.scaler.inverse(best_ant)
                 best_ant_og_abs_repr = ant_to_dict_representation(best_ant_abs)[0]
                 best_ant_og_rel_repr = ant_abs2rel(best_ant_og_abs_repr, env_og_rel_repr)
                 pickle.dump(best_ant_og_rel_repr, ant_handle)
