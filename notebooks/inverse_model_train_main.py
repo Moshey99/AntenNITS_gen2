@@ -86,6 +86,7 @@ def arg_parser():
     parser.add_argument('-pd', '--polyak_decay', type=float, default=0.9, help='parameter for polyak average smoothing')
     parser.add_argument('-a', '--nits_arch', type=list_str_to_list, default='[16,16,1]', help='architecture for the nits')
     parser.add_argument('-l', '--learning_rate', type=float, default=2e-4)
+    parser.add_argument('-wd', '--weight_decay', type=float, default=0.001)
     parser.add_argument('-p', '--dropout', type=float, default=-1.0, help='dropout probability')
     parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]', help='bounds for the values of the antenna')
     parser.add_argument('--no-conditional', action='store_false', dest='conditional', help='Set to disable conditional mode')
@@ -205,7 +206,7 @@ if __name__ == "__main__":
         # print number of parameters
         print('number of model parameters:', sum([np.prod(p.size()) for p in model.parameters()]))
         print_every = 1
-        optim = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+        optim = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=1, gamma=args.gamma)
 
         scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'
