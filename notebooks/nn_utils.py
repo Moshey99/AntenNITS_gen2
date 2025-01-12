@@ -30,17 +30,23 @@ if __name__ == "__main__":
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
             x_trn, gamma_trn, rad_trn, env_trn = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), ENV.to(device)
-            env_trn_og_repr = env_to_dict_representation(env_trn)
-            env_abs_trn_list = [list(env_trn_og_repr[i].values()) for i in range(env_trn.shape[0])]
-            env_abs_trn = torch.tensor(env_abs_trn_list, device=device)
+            if args.repr_mode == 'rel':
+                env_trn_og_repr = env_to_dict_representation(env_trn)
+                env_abs_trn_list = [list(env_trn_og_repr[i].values()) for i in range(env_trn.shape[0])]
+                env_abs_trn = torch.tensor(env_abs_trn_list, device=device)
+            else:
+                env_abs_trn = env_trn.clone()
             break
 
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(loader):
             x_val, gamma_val, rad_val, env_val = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), ENV.to(device)
-            envs_val_og_repr = env_to_dict_representation(env_val)
-            env_abs_val_list = [list(envs_val_og_repr[i].values()) for i in range(env_val.shape[0])]
-            envs_abs_val = torch.tensor(env_abs_val_list, device=device)
+            if args.repr_mode == 'rel':
+                envs_val_og_repr = env_to_dict_representation(env_val)
+                env_abs_val_list = [list(envs_val_og_repr[i].values()) for i in range(env_val.shape[0])]
+                envs_abs_val = torch.tensor(env_abs_val_list, device=device)
+            else:
+                envs_abs_val = env_val.clone()
             break
 
         nbrs = NearestNeighbors(n_neighbors=n_neighbors, algorithm='auto').fit(env_abs_trn)
