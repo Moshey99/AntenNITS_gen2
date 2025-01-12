@@ -816,8 +816,8 @@ def ant_abs2rel(ant_parameters_abs: dict, model_parameters: dict):
               - model_parameters['feed_length'] / 2)
         Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters_abs['w']
     else:
-        Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
-        Sy = model_parameters['Sy'] - ant_parameters['w']
+        Sz = model_parameters['Sz'] - ant_parameters_abs['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sy'] - ant_parameters_abs['w']
     for key, value in ant_parameters_abs.items():
         if len(key) == 4:
             if key[2] == 'z':
