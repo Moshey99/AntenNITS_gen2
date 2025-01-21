@@ -31,7 +31,7 @@ class CircularLoss(nn.Module):
 
 # class CircularLoss(nn.Module):
 #     def forward(self, y_true, y_pred):
-#         delta_theta = torch.atan2(torch.sin(y_pred - y_true), torch.cos(y_pred - y_true))
+#         delta_theta = torch.acos(torch.cos(y_pred - y_true))
 #         loss = torch.abs(delta_theta)
 #         return loss.mean()
 
