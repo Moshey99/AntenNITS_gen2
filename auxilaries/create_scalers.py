@@ -1,7 +1,7 @@
 from AntennaDesign.utils import *
 import os
 
-data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_5\processed_data'
+data_path = r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data'
 antenna_dataset_loader = AntennaDataSetsLoader(data_path, split_ratio=[0.9, 0.1, 0.])
 ant_scaler, env_scaler = standard_scaler(), standard_scaler()
 ant_scaler_path = os.path.join(data_path, 'ant_scaler.pkl')

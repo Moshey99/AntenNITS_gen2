@@ -75,7 +75,7 @@ def sort_by_metric(*args):
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
-                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data')
     parser.add_argument('-o', '--output_folder', type=str, default=None)
     parser.add_argument('-g', '--gpu', type=str, default='', help='comma-separated list of GPU IDs')
     parser.add_argument('-b', '--batch_size', type=int, default=12)

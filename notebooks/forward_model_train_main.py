@@ -28,7 +28,7 @@ def fit_scalers(ant_scaler_manager: ScalerManager, env_scaler_manager: ScalerMan
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data')
     parser.add_argument('--batch_size', type=int, default=12)
     parser.add_argument('--lr', type=float, default=1e-3, help='initial learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.001)
