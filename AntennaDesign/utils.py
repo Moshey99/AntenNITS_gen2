@@ -31,8 +31,8 @@ from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from shapely.geometry import Polygon
 
-MODEL_TYPE = 5
-assert MODEL_TYPE in [3, 5], 'MODEL_TYPE must be either 3 or 5.'
+MODEL_TYPE = 6
+assert MODEL_TYPE in [3, 5, 6], 'MODEL_TYPE must be either 3, 5 or 6.'
 EXAMPLE_FOLDER = os.path.join(Path(__file__).parent, 'EXAMPLE', f'model_{MODEL_TYPE}')
 
 
@@ -677,8 +677,18 @@ def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
 
 
 def check_ant_validity(ant_parameters, model_parameters) -> int:
-    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
-    if int(model_parameters['type']) == 3:
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if int(model_parameters['type']) == 6:
+        if (model_parameters['LG_y'] - ant_parameters['W1'] * 3 - ant_parameters['gap']) <= 0:
+            return 0
+        for [key, item] in ant_parameters.items():
+            if item <= 0:
+                return 0
+        for iw in range(4):
+            if ant_parameters[f'L{iw + 1:d}_rel'] > 1:
+                return 0
+        return 1
+    elif int(model_parameters['type']) == 3:
         Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters[
             'w'] / 2
               - model_parameters['feed_length'] / 2)
@@ -732,7 +742,9 @@ def check_ant_validity(ant_parameters, model_parameters) -> int:
 
 def model_rel2abs(model_parameters):
     model_parameters_abs = model_parameters.copy()
-    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if model_parameters['type'] == 6:
+        return model_parameters_abs
     if int(model_parameters['type']) == 3:
         axes = ['x', 'y', 'z']
         dimensions = ['width', 'height', 'length']
@@ -788,8 +800,16 @@ def env_to_dict_representation(env: torch.Tensor):
 
 def ant_rel2abs(ant_parameters: dict, model_parameters: dict):
     ant_parameters_abs = ant_parameters.copy()
-    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
-    if int(model_parameters["type"]) == 3:
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if int(model_parameters['type']) == 6:
+        ant_parameters_abs['L1_rel'] = ant_parameters_abs['L1_rel'] * model_parameters['LG_y']
+        ant_parameters_abs['L2_rel'] = ant_parameters_abs['L2_rel'] * (
+                    model_parameters['A_z'] - ant_parameters_abs['W2'])
+        ant_parameters_abs['L3_rel'] = ant_parameters_abs['L3_rel'] * (
+                    model_parameters['LG_y'] - ant_parameters_abs['W1'] * 3 - ant_parameters_abs['gap'])
+        ant_parameters_abs['L4_rel'] = ant_parameters_abs['L4_rel'] * ant_parameters_abs['L2_rel']
+        return ant_parameters_abs
+    elif int(model_parameters["type"]) == 3:
         Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
               - model_parameters['feed_length'] / 2)
         Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
@@ -809,8 +829,16 @@ def ant_rel2abs(ant_parameters: dict, model_parameters: dict):
 
 def ant_abs2rel(ant_parameters_abs: dict, model_parameters: dict):
     ant_parameters_rel = ant_parameters_abs.copy()
-    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
-    if int(model_parameters["type"]) == 3:
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if int(model_parameters["type"]) == 6:
+        ant_parameters_rel['L4_rel'] = ant_parameters_abs['L4_rel'] / ant_parameters_abs['L2_rel']
+        ant_parameters_rel['L1_rel'] = ant_parameters_abs['L1_rel'] / model_parameters['LG_y']
+        ant_parameters_rel['L2_rel'] = ant_parameters_abs['L2_rel'] / (
+                model_parameters['A_z'] - ant_parameters_abs['W2'])
+        ant_parameters_rel['L3_rel'] = ant_parameters_abs['L3_rel'] / (
+                model_parameters['LG_y'] - ant_parameters_abs['W1'] * 3 - ant_parameters_abs['gap'])
+        return ant_parameters_rel
+    elif int(model_parameters["type"]) == 3:
         Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters_abs[
             'w'] / 2
               - model_parameters['feed_length'] / 2)
