@@ -403,7 +403,7 @@ class AntennaDataSetsLoader:
                  pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
         assert os.path.exists(dataset_path), f'Dataset path does not exist in {dataset_path}'
         if split_ratio is None:
-            split_ratio = [0.8, 0.2, 0.0]  # [trn, val, tst]
+            split_ratio = [0.9, 0.1, 0.0]  # [trn, val, tst]
         self.pca_wrapper = PCAWrapper(pca)
         self.split = split_ratio
         self.repr_mode = repr_mode
