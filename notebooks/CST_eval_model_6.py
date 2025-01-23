@@ -1,5 +1,8 @@
 import os
 import re
+
+import numpy as np
+
 from AntennaDesign.utils import *
 import torch
 from forward_model_evaluate_main import plot_condition
@@ -18,106 +21,98 @@ def remove_filter_tag(filter_tag: str):
     return to_remove
 
 
+def interpolate_signal(signal, factor):
+  original_size = len(signal)
+  new_size = original_size * factor
+  new_x = np.linspace(0, original_size - 1, new_size)
+  interpolated_signal = np.interp(new_x, np.arange(original_size), signal)
+  return interpolated_signal
+
+
+def produce_model6_stats(gamma: np.array, frequencies: np.array):
+    def overlap(range1, range2):
+        if range1[0] > range2[1] or range1[1] < range2[0]:
+            return 0
+        max_overlap = min(range1[1], range2[1])
+        min_overlap = max(range1[0], range2[0])
+        return [min_overlap, max_overlap]
+
+    gamma = interpolate_signal(gamma, factor=4)
+    frequencies = interpolate_signal(frequencies, factor=4)
+    optimal_bw1 = [2300, 2700]
+    optimal_bw2 = [5150, 5850]
+    threshold = -10
+    frequencies_below_threshold = frequencies[gamma < threshold]
+    frequencies_below_threshold_f1 = frequencies_below_threshold[frequencies_below_threshold < 4000]
+    frequencies_below_threshold_f2 = frequencies_below_threshold[frequencies_below_threshold > 4000]
+    if len(frequencies_below_threshold_f1) > 0:
+        BW1 = [min(frequencies_below_threshold_f1), max(frequencies_below_threshold_f1)]
+        fc1 = frequencies_below_threshold_f1[np.argmin(gamma[np.where((gamma < threshold) & (frequencies < 4000))[0]])]
+        FBW1 = (max(BW1)-min(BW1))/fc1
+        overlap1 = overlap(BW1, optimal_bw1)
+        OBWO1 = (max(overlap1)-min(overlap1))/(max(optimal_bw1)-min(optimal_bw1)) if overlap1 != 0 else 0
+    else:
+        FBW1, OBWO1 = 0, 0
+
+    if len(frequencies_below_threshold_f2) > 0:
+        BW2 = [min(frequencies_below_threshold_f2), max(frequencies_below_threshold_f2)]
+        fc2 = frequencies_below_threshold_f2[np.argmin(gamma[np.where((gamma < threshold) & (frequencies > 4000))[0]])]
+        FBW2 = (max(BW2)-min(BW2))/fc2
+        overlap2 = overlap(BW2, optimal_bw2)
+        OBWO2 = (max(overlap2)-min(overlap2))/(max(optimal_bw2)-min(optimal_bw2)) if overlap2 != 0 else 0
+    else:
+        FBW2, OBWO2 = 0, 0
+    print(f'FBW1: {FBW1}, OBWO1: {OBWO1}, FBW2: {FBW2}, OBWO2: {OBWO2}')
+    return FBW1*100, OBWO1*100, FBW2*100, OBWO2*100
+
+
 if __name__ == "__main__":
-    filter_tag = 'grade_0'  # can be also 'nn' or 'grade_0'
-    all_gamma_stats, all_radiation_stats = [], []
-    total_counter = 0
-    gamma_only_improve_counter = 0
-    rad_only_improve_counter = 0
-    both_improve_counter = 0
-    both_big_improve_counter = 0
-    both_worse_counter = 0
-    gamma_th, rad_th = 2.89, 2.59
+    filter_tag = ''  # can be also 'nn' or 'grade_0'
+    all_gamma_stats = []
+    all_gammas = []
     # cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_cst_results_dipole"
-    cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\all_logs_generated_samples_val_data_checkpoint_directivity_mag_only\processed_results"
-    data_path = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k"
+    cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\all_logs_generated_samples_sweep_spec40\results"
     visited_antennas = []
     cst_antenna_folders = [os.path.join(cst_folder, folder) for folder in os.listdir(cst_folder)]
     cst_folders = [folder for folder in cst_antenna_folders if filter_tag in os.path.basename(folder)]
-    rad_stats_buffer = []
     gamma_stats_buffer = []
-    # s = {'SPEC_dipole_z_aligned_ENV_phone_3', 'SPEC_dipole_z_aligned_ENV_phone_4', 'SPEC_dipole_z_aligned_ENV_phone_bars_3',
-    #      'SPEC_dipole_z_aligned_ENV_phone_reflector_2', 'SPEC_dipole_z_aligned_ENV_phone_reflector_3',
-    #      'SPEC_dual_dipole_with_ground_z_aligned_ENV_196744', 'SPEC_dual_dipole_z_aligned_ENV_196744'}
-    # pattern = 'z_aligned'
     for folder in cst_folders:
-        # if not folder.__contains__(pattern) or os.path.basename(folder)[:-8] in s:
-        #     continue
-        cst_gam = downsample_gamma(np.load(os.path.join(folder, 'gamma.npy'))[np.newaxis], rate=4).squeeze()
-        cst_gam = torch.tensor(AntennaDataSet.clip_gamma(cst_gam)).float()
-        cst_rad = downsample_radiation(np.load(os.path.join(folder, 'radiation.npy'))[np.newaxis],
-                                       rates=[4, 2]).squeeze()
-        cst_rad = torch.tensor(AntennaDataSet.clip_radiation(cst_rad)).float()
+        with open(os.path.join(folder, 'S_parameters.pickle'), 'rb') as file:
+            gamma_raw, freqs = pickle.load(file)
+
+        cst_gam = 20 * np.log10(np.abs(gamma_raw))
         cst_name = os.path.basename(folder)
         addon_to_remove = remove_filter_tag(filter_tag)
-
+        all_gammas.append(cst_gam)
         antenna_name = re.sub(addon_to_remove, '', cst_name)
         print('Working on CST antenna:', cst_name, 'Matching test case:', antenna_name)
-        gt_gam = downsample_gamma(np.load(os.path.join(data_path, antenna_name, 'gamma.npy'))[np.newaxis],
-                                  rate=4).squeeze()
-        gt_gam = torch.tensor(AntennaDataSet.clip_gamma(gt_gam)).float()
-        gt_rad = downsample_radiation(np.load(os.path.join(data_path, antenna_name, 'radiation.npy'))[np.newaxis],
-                                      rates=[4, 2]).squeeze()
-        gt_rad = torch.tensor(AntennaDataSet.clip_radiation(gt_rad))
-        cst_gam, cst_rad = cst_gam.unsqueeze(0), cst_rad.unsqueeze(0)
-        gt_gam, gt_rad = gt_gam.unsqueeze(0), gt_rad.unsqueeze(0)
-        # x=2
-        # cst_rad = torch.cat((cst_rad[:,x:x+2], cst_rad[:,x+6:x+8]), dim=1)
-        # gt_rad = torch.cat((gt_rad[:,x:x+2], gt_rad[:,x+6:x+8]), dim=1)
-        gamma_stats = torch.tensor(produce_gamma_stats(gt_gam, cst_gam, dataset_type='dB', to_print=True))
-        rad_stats = torch.tensor(produce_radiation_stats(gt_rad, cst_rad, to_print=True))
+        gamma_stats = torch.tensor(produce_model6_stats(cst_gam, freqs))
         if antenna_name not in visited_antennas:
             visited_antennas.append(antenna_name)
             if len(gamma_stats_buffer) > 0:
-                best_gamma_idx_in_buffer = torch.stack(gamma_stats_buffer)[:, 0].argmin()
-                best_rad_idx_in_buffer = torch.stack(rad_stats_buffer)[:, 0].argmin()
+                best_gamma_idx_in_buffer = torch.stack(gamma_stats_buffer)[:, 0].argmax()
                 best_gamma_stats = gamma_stats_buffer[best_gamma_idx_in_buffer]
-                best_rad_stats = rad_stats_buffer[best_rad_idx_in_buffer]
                 gamma_stats_buffer = []
-                rad_stats_buffer = []
                 all_gamma_stats.append(best_gamma_stats)
-                all_radiation_stats.append(best_rad_stats)
-                total_counter += 1
-                if best_gamma_stats[0] < gamma_th:
-                    gamma_only_improve_counter += 1
-                if best_rad_stats[0] < rad_th:
-                    rad_only_improve_counter += 1
-                if best_gamma_stats[0] < gamma_th and best_rad_stats[0] < rad_th:
-                    both_improve_counter += 1
-                if best_gamma_stats[0] < gamma_th / 2 or best_rad_stats[0] < rad_th / 2:
-                    both_big_improve_counter += 1
-                if best_gamma_stats[0] > gamma_th and best_rad_stats[0] > rad_th:
-                    both_worse_counter += 1
-        gamma_stats_buffer.append(gamma_stats)
-        rad_stats_buffer.append(rad_stats)
-    if len(gamma_stats_buffer) > 0:
-        best_gamma_idx_in_buffer = torch.stack(gamma_stats_buffer)[:, 0].argmin()
-        best_rad_idx_in_buffer = torch.stack(rad_stats_buffer)[:, 0].argmin()
-        best_gamma_stats = gamma_stats_buffer[best_gamma_idx_in_buffer]
-        best_rad_stats = rad_stats_buffer[best_rad_idx_in_buffer]
-        gamma_stats_buffer = []
-        rad_stats_buffer = []
-        all_gamma_stats.append(best_gamma_stats)
-        all_radiation_stats.append(best_rad_stats)
-        total_counter += 1
-        if best_gamma_stats[0] < gamma_th:
-            gamma_only_improve_counter += 1
-        if best_rad_stats[0] < rad_th:
-            rad_only_improve_counter += 1
-        if best_gamma_stats[0] < gamma_th and best_rad_stats[0] < rad_th:
-            both_improve_counter += 1
-        if best_gamma_stats[0] < gamma_th / 2 or best_rad_stats[0] < rad_th / 2:
-            both_big_improve_counter += 1
-        if best_gamma_stats[0] > gamma_th and best_rad_stats[0] > rad_th:
-            both_worse_counter += 1
 
-    print(f'Total antennas: {total_counter}')
-    print(f'Gamma only improvement: {gamma_only_improve_counter}')
-    print(f'Radiation only improvement: {rad_only_improve_counter}')
-    print(f'Both improved: {both_improve_counter}')
-    print(f'Both improved by a lot: {both_big_improve_counter}')
-    print(f'Both worse: {both_worse_counter}')
-    mean_gamma_stats, _ = torch.median(torch.stack(all_gamma_stats), dim=0)
-    mean_rad_stats, _ = torch.median(torch.stack(all_radiation_stats), dim=0)
-    print('Mean gamma stats:', mean_gamma_stats)
-    print('Mean radiation stats:', mean_rad_stats)
+        gamma_stats_buffer.append(gamma_stats)
+    if len(gamma_stats_buffer) > 0:
+        best_gamma_idx_in_buffer = torch.stack(gamma_stats_buffer)[:, 0].argmax()
+        best_gamma_stats = gamma_stats_buffer[best_gamma_idx_in_buffer]
+        gamma_stats_buffer = []
+        all_gamma_stats.append(best_gamma_stats)
+
+    all_gamma_stats = torch.stack(all_gamma_stats)
+    mean_gamma_stats = torch.mean(all_gamma_stats, dim=0)
+    std_gamma_stats = torch.std(all_gamma_stats,dim=0)
+    print_stats = [str(np.round(m.item(),2))+'+-'+str(np.round(s.item(),2)) for m, s in zip(mean_gamma_stats, std_gamma_stats)]
+    print(f'gamma stats: {print_stats}')
+    freqs /=1000
+    for i,gamma in enumerate(all_gammas):
+        plt.plot(freqs, gamma, label=f'LG = {20+10*i}mm')
+    plt.plot(freqs, -10*np.ones_like(freqs), 'k--')
+    plt.ylim([-25,0])
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('Reflection Coefficient [dB]')
+    plt.legend()
+    plt.show()
