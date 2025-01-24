@@ -19,9 +19,9 @@ import pickle
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints_inverse\inv_forward_best_dict_bestloss_1.5098071080933284_lr_0.0002_bs_12_lamda_0.5.pth")
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data\checkpoints_inv_forw_hypernetwork\inv_forward_best_dict_bestloss_1.0341646643663873_lr_0.001_bs_12_lamda_0.5.pth")
     parser.add_argument('--output_folder_name', type=str, default=None, help='output folder base name')
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
     parser.add_argument('--test_path', type=str, default=None)
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     ant_scaler_manager = ScalerManager(path=os.path.join(args.data_path, f'ant_{scaler_name}.pkl'))
     ant_scaler_manager.try_loading_from_cache()
 
-    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=24000, repr_mode='abs')
+    antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=10000, repr_mode='abs')
     for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
         ant_abs_trn = torch.tensor(EMBEDDINGS, device=device)
         break
@@ -83,19 +83,22 @@ if __name__ == "__main__":
             gamma_stats = produce_gamma_stats(gamma, gamma_to_dB(gamma_pred), dataset_type='dB')
             rad_stats = produce_radiation_stats(rad, rad_pred)
             validity_function = AntValidityFunction(sample_path=os.path.join(path, name[0]), ant_scaler=ant_scaler_manager)
-            distances, neighbor_indices = nbrs.kneighbors(ant_scaler_manager.scaler.inverse(ant_pred))
-            nbrs_abs_trn = ant_abs_trn[neighbor_indices[0]]
-            nbrs_scaled_trn = ant_scaler_manager.scaler.forward(nbrs_abs_trn)
-            validity = [validity_function(ant.unsqueeze(0)) for ant in nbrs_scaled_trn]
-            valid_nbrs = np.nonzero(validity)[0]
-            if len(valid_nbrs) == 0:
-                print(f"No valid for neighbors {name[0]}, skipping")
-                continue
-            print(f"Found {len(valid_nbrs)} neighbors for {name[0]}. in index {valid_nbrs[0]}")
-            best_nbr_abs = nbrs_abs_trn[valid_nbrs][0:1]
-            best_nbr_og_repr = ant_abs2rel(ant_to_dict_representation(best_nbr_abs)[0], env_og_rel_repr)
+            if validity_function(ant_pred):
+                best_ant_abs = ant_scaler_manager.scaler.inverse(ant_pred)
+            else:
+                distances, neighbor_indices = nbrs.kneighbors(ant_scaler_manager.scaler.inverse(ant_pred))
+                nbrs_abs_trn = ant_abs_trn[neighbor_indices[0]]
+                nbrs_scaled_trn = ant_scaler_manager.scaler.forward(nbrs_abs_trn)
+                validity = [validity_function(ant.unsqueeze(0)) for ant in nbrs_scaled_trn]
+                valid_nbrs = np.nonzero(validity)[0]
+                if len(valid_nbrs) == 0:
+                    print(f"No valid for neighbors {name[0]}, skipping")
+                    continue
+                print(f"Found {len(valid_nbrs)} neighbors for {name[0]}. in index {valid_nbrs[0]}")
+                best_ant_abs = nbrs_abs_trn[valid_nbrs][0:1]
+            best_ant_og_repr = ant_abs2rel(ant_to_dict_representation(best_ant_abs)[0], env_og_rel_repr)
             with open(os.path.join(output_folder, f'ant_{name[0]}_shahar.pickle'), 'wb') as ant_handle:
-                pickle.dump(best_nbr_og_repr, ant_handle)
+                pickle.dump(best_ant_og_repr, ant_handle)
             with open(os.path.join(output_folder, f'env_{name[0]}_shahar.pickle'), 'wb') as env_handle:
                 pickle.dump(env_og_rel_repr, env_handle)
 
