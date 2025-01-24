@@ -910,8 +910,10 @@ def plot_antenna_figure(model_parameters, ant_parameters, alpha=1):
     plt.ioff()
     f, ax1 = plt.subplots()
     wings = ['w1', 'w2', 'q1', 'q2']
-    assert int(model_parameters["type"]) in [3, 5], 'model parameters["type"] must be either 3 or 5.'
-    if int(model_parameters["type"]) == 3:
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if int(model_parameters["type"]) == 6:
+        return f
+    elif int(model_parameters["type"]) == 3:
         Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
               - model_parameters['feed_length'] / 2)
         Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
