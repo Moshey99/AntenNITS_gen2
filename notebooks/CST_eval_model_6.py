@@ -62,7 +62,7 @@ def produce_model6_stats(gamma: np.array, frequencies: np.array):
         OBWO2 = (max(overlap2)-min(overlap2))/(max(optimal_bw2)-min(optimal_bw2)) if overlap2 != 0 else 0
     else:
         FBW2, OBWO2 = 0, 0
-    print(f'FBW1: {FBW1}, OBWO1: {OBWO1}, FBW2: {FBW2}, OBWO2: {OBWO2}')
+    print(f'FBW1: {np.round(100*FBW1,2)}, OBWO1: {np.round(100*OBWO1,2)}, FBW2: {np.round(100*FBW2,2)}, OBWO2: {np.round(100*OBWO2,2)}')
     return FBW1*100, OBWO1*100, FBW2*100, OBWO2*100
 
 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     all_gamma_stats = []
     all_gammas = []
     # cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_cst_results_dipole"
-    cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\all_logs_generated_samples_sweep_spec40\results"
+    cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\reference_sweep"
     visited_antennas = []
     cst_antenna_folders = [os.path.join(cst_folder, folder) for folder in os.listdir(cst_folder)]
     cst_folders = [folder for folder in cst_antenna_folders if filter_tag in os.path.basename(folder)]
