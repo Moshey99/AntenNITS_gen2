@@ -183,7 +183,7 @@ if __name__ == "__main__":
     add_labels(rects2)
     add_labels(rects3)
 
-    plt.ylim(0, 50)  # Adjust y-axis limits for better visualization
+    plt.ylim(0, 40)  # Adjust y-axis limits for better visualization
 #-----------------------------------------------------------------------------
 
 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     add_labels(rects2)
     add_labels(rects3)
 
-    plt.ylim(0, 52)  # Adjust y-axis limits for better visualization
+    plt.ylim(0, 22)  # Adjust y-axis limits for better visualization
 #-----------------------------------------------------------------------------------------------
 #     test_cases = [20, 30, 40, 50, 60]
 #     theirs_obwo2 = [0,57.21,100,44.85,33.47]
