@@ -73,7 +73,7 @@ if __name__ == "__main__":
     all_gamma_stats = []
     all_gammas = []
     # cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_cst_results_dipole"
-    cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\all_logs_generated_sweep_testdata_NN\results"
+    cst_folder = r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\all_logs_generated_sweep_testdata_Shahar\results"
     visited_antennas = []
     cst_antenna_folders = [os.path.join(cst_folder, folder) for folder in os.listdir(cst_folder)]
     cst_folders = [folder for folder in cst_antenna_folders if filter_tag in os.path.basename(folder)]
@@ -124,28 +124,58 @@ if __name__ == "__main__":
         obwo_frac = np.array(obwo_percentage) / 100
         return np.array(bfw)*obwo_frac
 
+    def arithmetic_mean(a, b):
+        return (a+b)/2
+
+    def geometric_mean(a, b):
+        return np.sqrt(a*b)
+
     test_cases = [20, 30, 40, 50, 60]
 
     ours_fbw1 = [0,10.85,19.08,10.14,5.98]
     ours_obwo1 = [0,67.95,100,59.59,34.86]
     ours_fbw2 = [16.84,17.83,20.17,15.68,16.23]
     ours_obwo2 = [100]*5
-    ours_efbw1 = np.round(calc_effective_bfw(ours_fbw1,ours_obwo1),2)
-    ours_efbw2 = np.round(calc_effective_bfw(ours_fbw2,ours_obwo2),2)
+    ours_efbw1 = calc_effective_bfw(ours_fbw1,ours_obwo1)
+    ours_efbw2 = calc_effective_bfw(ours_fbw2,ours_obwo2)
+    ours_geo_mean_efbw = geometric_mean(ours_efbw1,ours_efbw2)
+    ours_arith_mean_efbw = arithmetic_mean(ours_efbw1,ours_efbw2)
 
     theirs_fbw1 = [0,9.27,17.80,9.12,5.13]
     theirs_obwo1 = [0,57.21,100,44.85,33.47]
     theirs_fbw2 = [14.14,14.54,18.05,14.39,16.11]
     theirs_obwo2 = [98.59,100,100,100,100]
-    theirs_efbw1 = np.round(calc_effective_bfw(theirs_fbw1, theirs_obwo1),2)
-    theirs_efbw2 = np.round(calc_effective_bfw(theirs_fbw2, theirs_obwo2),2)
+    theirs_efbw1 = calc_effective_bfw(theirs_fbw1, theirs_obwo1)
+    theirs_efbw2 = calc_effective_bfw(theirs_fbw2, theirs_obwo2)
+    theirs_geo_mean_efbw = geometric_mean(theirs_efbw1, theirs_efbw2)
+    theirs_arith_mean_efbw = arithmetic_mean(theirs_efbw1, theirs_efbw2)
 
     nn_fbw1 = [0,0,34.52,16.24,0]
     nn_obwo1 = [0,0,100,85.82,0]
     nn_obwo2 = [0,24.68,5.58,3.88,0]
     nn_fbw2 = [0,24.22,45.25,30.83,0]
-    nn_efbw1 = np.round(calc_effective_bfw(nn_fbw1, nn_obwo1),2)
-    nn_efbw2 = np.round(calc_effective_bfw(nn_fbw2, nn_obwo2),2)
+    nn_efbw1 = calc_effective_bfw(nn_fbw1, nn_obwo1)
+    nn_efbw2 = calc_effective_bfw(nn_fbw2, nn_obwo2)
+    nn_geo_mean_efbw = geometric_mean(nn_efbw1, nn_efbw2)
+    nn_arith_mean_efbw = arithmetic_mean(nn_efbw1, nn_efbw2)
+
+    genetic_fbw1 = [4.24,17.12,28.07,6,0]
+    genetic_obwo1 = [0,3.38,100,5.9,10.81]
+    genetic_fbw2 = [12.96,13.82,4.52,5.9,10.81]
+    genetic_obwo2 = [87.92, 69.32, 0, 29.1, 29.5]
+    genetic_efbw1 = calc_effective_bfw(genetic_fbw1, genetic_obwo1)
+    genetic_efbw2 = calc_effective_bfw(genetic_fbw2, genetic_obwo2)
+    genetic_geo_mean_efbw = geometric_mean(genetic_efbw1, genetic_efbw2)
+    genetic_arith_mean_efbw = arithmetic_mean(genetic_efbw1, genetic_efbw2)
+
+    shahar_fbw1 = [13.66,20.67,11.9,2.74,2.56]
+    shahar_obwo1 = [0,0,0,10.87,0]
+    shahar_fbw2 = [3.91,11.5,17.95,2.07,14.44]
+    shahar_obwo2 = [12.12,71.93,100,0,35.21]
+    shahar_efbw1 = calc_effective_bfw(shahar_fbw1, shahar_obwo1)
+    shahar_efbw2 = calc_effective_bfw(shahar_fbw2, shahar_obwo2)
+    shahar_geo_mean_efbw = geometric_mean(shahar_efbw1, shahar_efbw2)
+    shahar_arith_mean_efbw = arithmetic_mean(shahar_efbw1, shahar_efbw2)
     # plt.figure()
     # y2_ours = [16.84,17.83,20.17,15.68,16.23]
     # y2_theirs = [14.14,14.54,18.05,14.39,16.11]
@@ -161,20 +191,23 @@ if __name__ == "__main__":
     # plt.show()
 
     # Create the bar chart
-    width = 0.2  # Width of the bars
+    width = 0.15  # Width of the bars
     x = np.arange(len(test_cases))
 
     fig, ax = plt.subplots()
-    rects1 = ax.bar(x - width / 3, ours_efbw1, width, label='Ours', color='blue')
-    rects2 = ax.bar(x - width / 3 + width, theirs_efbw1, width, label='Theirs', color='orange')
-    rects3 = ax.bar(x - width / 3 + 2*width, nn_efbw1, width, label='NN', color='green')
+    init = 2*width
+    rects1 = ax.bar(x - init, np.round(ours_geo_mean_efbw,2), width, label='Ours', color='blue')
+    rects2 = ax.bar(x - init + width, np.round(theirs_geo_mean_efbw,2), width, label='Theirs', color='orange')
+    rects3 = ax.bar(x - init + 2*width, np.round(nn_geo_mean_efbw,2), width, label='NN', color='green')
+    rects4 = ax.bar(x - init + 3*width, np.round(genetic_geo_mean_efbw,2), width, label='Genetic', color='purple')
+    rects5 = ax.bar(x - init + 4*width, np.round(shahar_geo_mean_efbw,2), width, label='Inv-Forward Concat', color='pink')
 
 
 
     # Add labels, title, and legend
-    ax.set_ylabel('eFBW-f1 (%)')
+    ax.set_ylabel('eFBW (%)')
     ax.set_xlabel('Lg Test Case')
-    ax.set_title('Comparison of eFBW-f1: Ours vs. Theirs')
+    ax.set_title('Comparison of geometric mean eFBW: Ours vs. Theirs')
     ax.set_xticks(x)
     ax.set_xticklabels(test_cases)
     ax.legend()
@@ -182,20 +215,25 @@ if __name__ == "__main__":
     add_labels(rects1)
     add_labels(rects2)
     add_labels(rects3)
+    add_labels(rects4)
+    add_labels(rects5)
 
-    plt.ylim(0, 40)  # Adjust y-axis limits for better visualization
+    plt.ylim(0, 22)  # Adjust y-axis limits for better visualization
 #-----------------------------------------------------------------------------
 
 
     fig, ax = plt.subplots()
-    rects1 = ax.bar(x - width / 3, ours_efbw2, width, label='Ours', color='blue')
-    rects2 = ax.bar(x - width / 3 + width, theirs_efbw2, width, label='Theirs', color='orange')
-    rects3 = ax.bar(x - width / 3 + 2*width, nn_efbw2, width, label='NN', color='green')
+    init = 2*width
+    rects1 = ax.bar(x - init, np.round(ours_arith_mean_efbw,2), width, label='Ours', color='blue')
+    rects2 = ax.bar(x - init + width,  np.round(theirs_arith_mean_efbw,2), width, label='Theirs', color='orange')
+    rects3 = ax.bar(x - init + 2*width,  np.round(nn_arith_mean_efbw,2), width, label='NN', color='green')
+    rects4 = ax.bar(x - init + 3*width,  np.round(genetic_arith_mean_efbw,2), width, label='Genetic', color='purple')
+    rects5 = ax.bar(x - init + 4*width,  np.round(shahar_arith_mean_efbw,2), width, label='Inv-Forward Concat', color='pink')
 
     # Add labels, title, and legend
-    ax.set_ylabel('eFBW-f2 (%)')
+    ax.set_ylabel('eFBW (%)')
     ax.set_xlabel('Lg Test Case')
-    ax.set_title('Comparison of eFBW-f2: Ours vs. Theirs')
+    ax.set_title('Comparison of mean eFBW')
     ax.set_xticks(x)
     ax.set_xticklabels(test_cases)
     ax.legend()
@@ -203,6 +241,8 @@ if __name__ == "__main__":
     add_labels(rects1)
     add_labels(rects2)
     add_labels(rects3)
+    add_labels(rects4)
+    add_labels(rects5)
 
     plt.ylim(0, 22)  # Adjust y-axis limits for better visualization
 #-----------------------------------------------------------------------------------------------
