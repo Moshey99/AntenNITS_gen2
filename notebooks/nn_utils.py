@@ -9,7 +9,7 @@ from inverse_model_evaluate_main import arg_parser, sort_by_metric
 
 if __name__ == "__main__":
     args = arg_parser().parse_args()
-    n_neighbors = 100
+    n_neighbors = 500
     inverse_checkpoint_folder = os.path.join(args.data_path, 'checkpoints_inverse')
     output_folder_name = args.output_folder_name if args.output_folder_name is not None else 'NN_generated_antennas'
     output_folder = os.path.join(inverse_checkpoint_folder, output_folder_name)
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     env_scaler_manager.try_loading_from_cache()
     ant_scaler_manager = ScalerManager(path=os.path.join(data_path, 'ant_scaler.pkl'))
     ant_scaler_manager.try_loading_from_cache()
-    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=24000, try_cache=False)
+    antenna_dataset_loader = AntennaDataSetsLoader(data_path, batch_size=4400, try_cache=False)
     antenna_dataset_loader.load_test_data(args.test_path) if args.test_path is not None else None
     path = args.test_path if args.test_path is not None else data_path
     loader = antenna_dataset_loader.tst_loader if args.test_path is not None else antenna_dataset_loader.val_loader
@@ -30,17 +30,22 @@ if __name__ == "__main__":
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(antenna_dataset_loader.trn_loader):
             x_trn, gamma_trn, rad_trn, env_trn = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), ENV.to(device)
-            env_trn_og_repr = env_to_dict_representation(env_trn)
-            env_abs_trn_list = [list(env_trn_og_repr[i].values()) for i in range(env_trn.shape[0])]
-            env_abs_trn = torch.tensor(env_abs_trn_list, device=device)
+            if args.repr_mode == 'rel':
+                env_trn_og_repr = env_to_dict_representation(env_trn)
+                env_abs_trn_list = [list(env_trn_og_repr[i].values()) for i in range(env_trn.shape[0])]
+                env_abs_trn = torch.tensor(env_abs_trn_list, device=device)
+            else:
+                env_abs_trn = env_trn.clone()
             break
-
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(loader):
             x_val, gamma_val, rad_val, env_val = ant_scaler_manager.scaler.forward(EMBEDDINGS).float().to(device), \
                 GAMMA.to(device), RADIATION.to(device), ENV.to(device)
-            envs_val_og_repr = env_to_dict_representation(env_val)
-            env_abs_val_list = [list(envs_val_og_repr[i].values()) for i in range(env_val.shape[0])]
-            envs_abs_val = torch.tensor(env_abs_val_list, device=device)
+            if args.repr_mode == 'rel':
+                envs_val_og_repr = env_to_dict_representation(env_val)
+                env_abs_val_list = [list(envs_val_og_repr[i].values()) for i in range(env_val.shape[0])]
+                envs_abs_val = torch.tensor(env_abs_val_list, device=device)
+            else:
+                envs_abs_val = env_val.clone()
             break
 
         nbrs = NearestNeighbors(n_neighbors=n_neighbors, algorithm='auto').fit(env_abs_trn)
@@ -52,8 +57,13 @@ if __name__ == "__main__":
         all_gamma_stats_best, all_radiation_stats_best = [], []
         for sample_idx in range(nn_indices.shape[0]):
             sample_name = name[sample_idx]
+            sample_nn_indices = nn_indices[sample_idx]
             env_og_rel_repr = env_to_dict_representation(
                 torch.tensor(np.load(os.path.join(path, sample_name, 'environment.npy'))[np.newaxis]))[0]
+            all_valid_neighbors_scaled = x_trn[sample_nn_indices][np.nonzero(
+                [check_ant_validity(ant_abs2rel(ant, env_og_rel_repr), env_og_rel_repr) for ant in
+                 ant_to_dict_representation(ant_scaler_manager.scaler.inverse(x_trn[sample_nn_indices]))])]
+            torch.save(obj=all_valid_neighbors_scaled, f=os.path.join(path, sample_name, 'valid_neighbors_scaled.pth'))
 
             gamma_stats = produce_gamma_stats(gamma_val[sample_idx].unsqueeze(0), gamma_pred_dB[sample_idx], dataset_type='dB', to_print=False)
             radiation_stats = produce_radiation_stats(rad_val[sample_idx].unsqueeze(0), rad_pred[sample_idx], to_print=False)
@@ -64,7 +74,6 @@ if __name__ == "__main__":
                 best_nbr_index = sorting_idxs[k]
                 gamma_stats_best = [gamma_stats[i][best_nbr_index] for i in range(len(gamma_stats))]
                 radiation_stats_best = [radiation_stats[i][best_nbr_index] for i in range(len(radiation_stats))]
-                sample_nn_indices = nn_indices[sample_idx]
                 ant_neighbor = x_trn[sample_nn_indices[best_nbr_index]]
                 ant_neighbor_inverse = ant_scaler_manager.scaler.inverse(ant_neighbor.unsqueeze(0))
                 ant_neighbor_og_repr = ant_to_dict_representation(ant_neighbor_inverse)[0]

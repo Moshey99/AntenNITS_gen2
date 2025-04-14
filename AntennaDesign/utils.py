@@ -31,7 +31,12 @@ from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from shapely.geometry import Polygon
 
-EXAMPLE_FOLDER = os.path.join(Path(__file__).parent, 'EXAMPLE')
+MODEL_TYPE = os.environ.get("MODEL_TYPE")
+if MODEL_TYPE is None:
+    raise ValueError("Environment variable 'MODEL_TYPE' is not set.")
+MODEL_TYPE = int(MODEL_TYPE)
+assert MODEL_TYPE in [3, 5, 6], 'MODEL_TYPE must be either 3, 5 or 6.'
+EXAMPLE_FOLDER = os.path.join(Path(__file__).parent, 'EXAMPLE', f'model_{MODEL_TYPE}')
 
 
 class DataPreprocessor:
@@ -44,13 +49,10 @@ class DataPreprocessor:
             os.makedirs(destination_path, exist_ok=True)
 
     def antenna_preprocessor(self, debug=False):
-        scaler = standard_scaler()
-        scaler_manager = ScalerManager(path=os.path.join(self.destination_path, 'ant_scaler.pkl'), scaler=scaler)
         ant_path = os.path.join(EXAMPLE_FOLDER, 'ant_parameters.pickle')
         with open(ant_path, 'rb') as f:
             example = pickle.load(f)
         print('Preprocessing antennas')
-        all_ants = []
         folder_path = self.folder_path
         for idx, name in enumerate(sorted(os.listdir(folder_path))):
             print('working on antenna number:', name, f'({idx})', 'out of:', self.num_data_points)
@@ -59,23 +61,17 @@ class DataPreprocessor:
                 antenna_dict = pickle.load(f)
             antenna_vals = [antenna_dict[key] for key in example.keys()]
             antenna = np.array(antenna_vals)
-            all_ants.append(antenna)
             if not debug:
                 output_folder = os.path.join(self.destination_path, name)
                 os.makedirs(output_folder, exist_ok=True)
                 np.save(os.path.join(output_folder, 'antenna.npy'), antenna)
-        scaler_manager.fit(np.array(all_ants))
-        scaler_manager.dump()
         print(f'Antennas saved successfully')
 
     def environment_preprocessor(self, debug=False):
         print('Preprocessing environments')
-        scaler = standard_scaler()
-        scaler_manager = ScalerManager(path=os.path.join(self.destination_path, 'env_scaler.pkl'), scaler=scaler)
         env_path = os.path.join(EXAMPLE_FOLDER, 'model_parameters.pickle')
         with open(env_path, 'rb') as f:
             example = pickle.load(f)
-        all_envs = []
         folder_path = self.folder_path
         for idx, name in enumerate(sorted(os.listdir(folder_path))):
             print('working on antenna number:', name, f'({idx})', 'out of:', self.num_data_points)
@@ -89,13 +85,10 @@ class DataPreprocessor:
                 env_dict['plane'] = 0 if plane == 'xz' else 1
                 env_vals = [env_dict[key] for key in example.keys()]
                 assert np.all([type(value) != list for value in env_vals]), 'ERROR. List in Environments values'
-                all_envs.append(env_vals)
                 if not debug:
                     output_folder = os.path.join(self.destination_path, name)
                     os.makedirs(output_folder, exist_ok=True)
                     np.save(os.path.join(output_folder, 'environment.npy'), np.array(env_vals))
-        scaler_manager.fit(np.array(all_envs))
-        scaler_manager.dump()
         print(f'Environments saved successfully')
 
     @staticmethod
@@ -267,6 +260,7 @@ class PCAWrapper:
 class AntennaDataSet(torch.utils.data.Dataset):
     def __init__(self, antenna_folders: list[str], repr_mode: str, pca_wrapper: PCAWrapper, try_cache: bool):
         assert repr_mode in ['abs', 'rel', 'both'], 'Invalid dataset representation mode'
+        assert len(antenna_folders) > 0, 'Antenna folders must have at least one element, not empty.'
         self.repr_mode = repr_mode
         self.antenna_folders = antenna_folders
         self.len = len(antenna_folders)
@@ -412,7 +406,7 @@ class AntennaDataSetsLoader:
                  pca: Optional[PCA] = None, split_ratio=None, try_cache=True):
         assert os.path.exists(dataset_path), f'Dataset path does not exist in {dataset_path}'
         if split_ratio is None:
-            split_ratio = [0.8, 0.2, 0.0]  # [trn, val, tst]
+            split_ratio = [0.9, 0.1, 0.0]  # [trn, val, tst]
         self.pca_wrapper = PCAWrapper(pca)
         self.split = split_ratio
         self.repr_mode = repr_mode
@@ -443,7 +437,7 @@ class AntennaDataSetsLoader:
         tst_len = len(all_folders) - trn_len - val_len
         self.trn_folders = all_folders[:trn_len]
         self.val_folders = all_folders[trn_len:trn_len + val_len]
-        self.tst_folders = all_folders[trn_len + val_len:]
+        self.tst_folders = all_folders[trn_len + val_len:] if tst_len > 0 else [self.val_folders[0]]
 
     def load_test_data(self, test_path):
         assert os.path.exists(test_path), f'Test path does not exist in {test_path}'
@@ -686,9 +680,25 @@ def save_antenna_mat(antenna: torch.Tensor, path: str, scaler: standard_scaler):
 
 
 def check_ant_validity(ant_parameters, model_parameters) -> int:
-    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
-          - model_parameters['feed_length'] / 2)
-    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if int(model_parameters['type']) == 6:
+        if (model_parameters['LG_y'] - ant_parameters['W1'] * 3 - ant_parameters['gap']) <= 0:
+            return 0
+        for [key, item] in ant_parameters.items():
+            if item <= 0:
+                return 0
+        for iw in range(4):
+            if ant_parameters[f'L{iw + 1:d}_rel'] > 1:
+                return 0
+        return 1
+    elif int(model_parameters['type']) == 3:
+        Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters[
+            'w'] / 2
+              - model_parameters['feed_length'] / 2)
+        Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    else:
+        Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sy'] - ant_parameters['w']
     wings = ['w1', 'w2', 'q1', 'q2']
     for key in ant_parameters:
         if ant_parameters[key] < 0: return 0
@@ -735,20 +745,25 @@ def check_ant_validity(ant_parameters, model_parameters) -> int:
 
 def model_rel2abs(model_parameters):
     model_parameters_abs = model_parameters.copy()
-    axes = ['x', 'y', 'z']
-    dimensions = ['width', 'height', 'length']
-
-    elements = ['a', 'b', 'c', 'd']
-    for e in elements:
-        for i_axis, axis in enumerate(axes):
-            model_parameters_abs[e + 'd' + axis] = model_parameters[e + 'd' + axis] * model_parameters[
-                dimensions[i_axis]]
-            model_parameters_abs[e + 'r' + axis] = model_parameters[e + 'r' + axis] * model_parameters[e + 'd' + axis] * \
-                                                   model_parameters[dimensions[i_axis]]
-    model_parameters_abs['a'] = model_parameters['a'] * model_parameters['width']
-    model_parameters_abs['b'] = model_parameters['b'] * model_parameters['height']
-    model_parameters_abs['c'] = model_parameters['c'] * model_parameters['height']
-    # model_parameters_abs['d'] = model_parameters['d'] * model_parameters['height']
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if model_parameters['type'] == 6:
+        return model_parameters_abs
+    if int(model_parameters['type']) == 3:
+        axes = ['x', 'y', 'z']
+        dimensions = ['width', 'height', 'length']
+        elements = ['a', 'b', 'c', 'd']
+        for e in elements:
+            for i_axis, axis in enumerate(axes):
+                model_parameters_abs[e + 'd' + axis] = model_parameters[e + 'd' + axis] * model_parameters[
+                    dimensions[i_axis]]
+                model_parameters_abs[e + 'r' + axis] = model_parameters[e + 'r' + axis] * model_parameters[e + 'd' + axis] * \
+                                                       model_parameters[dimensions[i_axis]]
+        model_parameters_abs['a'] = model_parameters['a'] * model_parameters['width']
+        model_parameters_abs['b'] = model_parameters['b'] * model_parameters['height']
+        model_parameters_abs['c'] = model_parameters['c'] * model_parameters['height']
+    else:
+        model_parameters_abs['Lz'] = model_parameters['Sz'] * model_parameters_abs['Lz']
+        model_parameters_abs['Ly'] = model_parameters['Sy'] * model_parameters_abs['Ly']
     return model_parameters_abs
 
 
@@ -761,6 +776,9 @@ def ant_to_dict_representation(ant: torch.Tensor):
     ant = ant.clone().detach().cpu().numpy()
     for i in range(ant.shape[0]):
         ant_i = np.round(ant[i], 2)
+        assert len(ant_i) == len(example), 'length of the antenna does not match the number of example,' \
+                                           ' so antenna cannot be transformed to models dictionary representation.' \
+                                           'Check that the model type is correct and represents your data.'
         ant_i_dict = {key: val for key, val in zip(example.keys(), ant_i)}
         all_ant_dicts.append(ant_i_dict)
     return np.array(all_ant_dicts)
@@ -774,7 +792,10 @@ def env_to_dict_representation(env: torch.Tensor):
     all_env_dicts = []
     env = env.clone().detach().cpu().numpy()
     for i in range(env.shape[0]):
-        env_i = np.round(np.append([3], env[i]), 2)
+        env_i = np.round(np.append([MODEL_TYPE], env[i]), 2)
+        assert len(env_i) == len(example), 'length of the environment does not match the number of example,' \
+                                           ' so environment cannot be transformed to models dictionary representation.' \
+                                           'Check that the model type is correct and represents your data.'
         env_i_dict = {key: val for key, val in zip(example.keys(), env_i)}
         all_env_dicts.append(env_i_dict)
     return np.array(all_env_dicts)
@@ -782,9 +803,22 @@ def env_to_dict_representation(env: torch.Tensor):
 
 def ant_rel2abs(ant_parameters: dict, model_parameters: dict):
     ant_parameters_abs = ant_parameters.copy()
-    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
-          - model_parameters['feed_length'] / 2)
-    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if int(model_parameters['type']) == 6:
+        ant_parameters_abs['L1_rel'] = ant_parameters_abs['L1_rel'] * model_parameters['LG_y']
+        ant_parameters_abs['L2_rel'] = ant_parameters_abs['L2_rel'] * (
+                    model_parameters['A_z'] - ant_parameters_abs['W2'])
+        ant_parameters_abs['L3_rel'] = ant_parameters_abs['L3_rel'] * (
+                    model_parameters['LG_y'] - ant_parameters_abs['W1'] * 3 - ant_parameters_abs['gap'])
+        ant_parameters_abs['L4_rel'] = ant_parameters_abs['L4_rel'] * ant_parameters_abs['L2_rel']
+        return ant_parameters_abs
+    elif int(model_parameters["type"]) == 3:
+        Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
+              - model_parameters['feed_length'] / 2)
+        Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    else:
+        Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sy'] - ant_parameters['w']
     for key, value in ant_parameters.items():
         if len(key) == 4:
             if key[2] == 'z':
@@ -798,10 +832,23 @@ def ant_rel2abs(ant_parameters: dict, model_parameters: dict):
 
 def ant_abs2rel(ant_parameters_abs: dict, model_parameters: dict):
     ant_parameters_rel = ant_parameters_abs.copy()
-    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters_abs[
-        'w'] / 2
-          - model_parameters['feed_length'] / 2)
-    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters_abs['w']
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if int(model_parameters["type"]) == 6:
+        ant_parameters_rel['L4_rel'] = ant_parameters_abs['L4_rel'] / ant_parameters_abs['L2_rel']
+        ant_parameters_rel['L1_rel'] = ant_parameters_abs['L1_rel'] / model_parameters['LG_y']
+        ant_parameters_rel['L2_rel'] = ant_parameters_abs['L2_rel'] / (
+                model_parameters['A_z'] - ant_parameters_abs['W2'])
+        ant_parameters_rel['L3_rel'] = ant_parameters_abs['L3_rel'] / (
+                model_parameters['LG_y'] - ant_parameters_abs['W1'] * 3 - ant_parameters_abs['gap'])
+        return ant_parameters_rel
+    elif int(model_parameters["type"]) == 3:
+        Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters_abs[
+            'w'] / 2
+              - model_parameters['feed_length'] / 2)
+        Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters_abs['w']
+    else:
+        Sz = model_parameters['Sz'] - ant_parameters_abs['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sy'] - ant_parameters_abs['w']
     for key, value in ant_parameters_abs.items():
         if len(key) == 4:
             if key[2] == 'z':
@@ -866,9 +913,17 @@ def plot_antenna_figure(model_parameters, ant_parameters, alpha=1):
     plt.ioff()
     f, ax1 = plt.subplots()
     wings = ['w1', 'w2', 'q1', 'q2']
-    Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
-          - model_parameters['feed_length'] / 2)
-    Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    assert int(model_parameters["type"]) in [3, 5, 6], 'model parameters["type"] must be either 3, 5 or 6.'
+    if int(model_parameters["type"]) == 6:
+        return f
+    elif int(model_parameters["type"]) == 3:
+        Sz = (model_parameters['length'] * model_parameters['adz'] * model_parameters['arz'] / 2 - ant_parameters['w'] / 2
+              - model_parameters['feed_length'] / 2)
+        Sy = model_parameters['height'] * model_parameters['ady'] * model_parameters['ary'] - ant_parameters['w']
+    else:
+        Sz = model_parameters['Sz'] - ant_parameters['w'] / 2 - model_parameters['feed_length'] / 2
+        Sy = model_parameters['Sy'] - ant_parameters['w']
+
     data_linewidth_plot([Sy * ant_parameters['fx'], Sy * ant_parameters['fx']],
                         [-10, 10], linewidth=ant_parameters['w'] + 0.1, alpha=alpha, color='k')
     for wing in wings:

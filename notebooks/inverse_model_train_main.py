@@ -26,33 +26,6 @@ from AntennaDesign.models.forward_GammaRad import forward_GammaRad
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-def correlation_dist(corr_mat1, corr_mat2):
-    d = 1 - np.trace(np.dot(corr_mat1, corr_mat2)) / (np.linalg.norm(corr_mat1) * np.linalg.norm(corr_mat2))
-    return d
-
-
-def kl_eval(model, data, n):
-    paths = sorted(glob.glob('nits_checkpoints/ANTmodel_*.pth'))
-    vv = np.linspace(-4, 4, num=7000)
-    kl_divs = []
-    for path in paths:
-        kl_divs_path = []
-        print(path)
-        model.load_state_dict(torch.load(path, map_location=device))
-        smp = model.model.sample(n, device)
-        for feature in range(smp.shape[1]):
-            kde_smp = gaussian_kde(smp[:, feature]).pdf(vv)
-            kde_real = gaussian_kde(data.trn.x[:, feature]).pdf(vv)
-            kl_div_value = np.sum(kl_div(kde_real, kde_smp))
-            kl_divs_path.append(kl_div_value)
-        kl_divs.append(kl_divs_path)
-    kl_divs = np.array(kl_divs)
-    kl_divs = np.sum(kl_divs, axis=1)
-    best_path = paths[np.argmin(kl_divs)]
-    print(f'best model for KL Divergence evaluation is {best_path}')
-    return
-
-
 def plot_condition(condition, freqs):
     fig, (ax1, ax2) = plt.subplots(1, 2)
     gamma, rad = condition
@@ -82,28 +55,6 @@ def list_str_to_list(s):
     return s
 
 
-def produce_NN_stats(data):
-    def find_NN(X_train, query, k=5):
-        from sklearn.neighbors import NearestNeighbors
-        nbrs = NearestNeighbors(n_neighbors=k, algorithm='auto').fit(X_train)
-        distances, indices = nbrs.kneighbors(query)
-        return indices
-
-    k_neighbors = 5
-    n_train_samples, n_val_samples = len(data.trn.x), len(data.val.x)
-    antenna_nn_indices = find_NN(data.trn.x, data.val.x, k=k_neighbors)
-    nn_gammas = data.trn.gamma[antenna_nn_indices].reshape(n_val_samples * k_neighbors, -1)
-    nn_gammas = downsample_gamma(nn_gammas)
-    nn_radiations = data.trn.radiation[antenna_nn_indices].reshape(n_val_samples * k_neighbors,
-                                                                   *data.trn.radiation.shape[1:])
-    nn_radiations = downsample_radiation(nn_radiations)
-    gt_gammas = torch.tensor(np.repeat(downsample_gamma(data.val.gamma), k_neighbors, axis=0))
-    gt_radiations = torch.tensor(np.repeat(downsample_radiation(data.val.radiation), k_neighbors, axis=0))
-    produce_gamma_stats(GT_gamma=gt_gammas, predicted_gamma=torch.tensor(nn_gammas), dataset_type='dB')
-    produce_radiation_stats(predicted_radiation=torch.tensor(nn_radiations), gt_radiation=gt_radiations)
-    pass
-
-
 def sort_by_metric(*args):
     sorting_idxs = []
     for i, metric in enumerate(args):
@@ -124,7 +75,7 @@ def sort_by_metric(*args):
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
-                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data')
     parser.add_argument('-o', '--output_folder', type=str, default=None)
     parser.add_argument('-g', '--gpu', type=str, default='', help='comma-separated list of GPU IDs')
     parser.add_argument('-b', '--batch_size', type=int, default=12)
@@ -135,6 +86,7 @@ def arg_parser():
     parser.add_argument('-pd', '--polyak_decay', type=float, default=0.9, help='parameter for polyak average smoothing')
     parser.add_argument('-a', '--nits_arch', type=list_str_to_list, default='[16,16,1]', help='architecture for the nits')
     parser.add_argument('-l', '--learning_rate', type=float, default=2e-4)
+    parser.add_argument('-wd', '--weight_decay', type=float, default=0.001)
     parser.add_argument('-p', '--dropout', type=float, default=-1.0, help='dropout probability')
     parser.add_argument('--bounds', type=list_str_to_list, default='[-3,3]', help='bounds for the values of the antenna')
     parser.add_argument('--no-conditional', action='store_false', dest='conditional', help='Set to disable conditional mode')
@@ -254,7 +206,7 @@ if __name__ == "__main__":
         # print number of parameters
         print('number of model parameters:', sum([np.prod(p.size()) for p in model.parameters()]))
         print_every = 1
-        optim = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+        optim = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=1, gamma=args.gamma)
 
         scaler_name = 'scaler' if args.repr_mode == 'abs' else 'scaler_rel'

@@ -21,7 +21,7 @@ from typing import Tuple, Callable
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data')
     parser.add_argument('--test_path', type=str, default=None)
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
     parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
@@ -29,7 +29,7 @@ def arg_parser():
     parser.add_argument('--rad_phase_fac', type=float, default=0., help='weight for phase in radiation loss')
     parser.add_argument('--lamda', type=float, default=0.5, help='weight for radiation in gamma radiation loss')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\updated_forward_best_dict.pth")
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data\checkpoints\forward.pth")
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     parser.add_argument('--output_folder_name', type=str, default=None, help='output folder base name')
     parser.add_argument('--gpu', type=int, default=0, help='GPU to use')
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
     print(args, device)
     inverse_checkpoint_folder = os.path.join(args.data_path, 'checkpoints_inverse')
-    output_folder_name = args.output_folder_name if args.output_folder_name is not None else 'generated_antennas'
+    output_folder_name = args.output_folder_name if args.output_folder_name is not None else 'generated_antennas_genetic'
     output_folder = os.path.join(inverse_checkpoint_folder, output_folder_name)
     os.makedirs(output_folder, exist_ok=True)
     antenna_dataset_loader = AntennaDataSetsLoader(args.data_path, batch_size=1, repr_mode=args.repr_mode)
@@ -113,21 +113,21 @@ if __name__ == "__main__":
             fitness_func = FitnessFunction(model, loss_fn, target, env)
             population_size = min(150, nearest_neighbors.shape[0])
             ga = GeneticAlgorithm(
-                vector_length=40,
+                vector_length=7,
                 initial_population=nearest_neighbors[:population_size],
                 population_size=population_size,
-                generations=30,
-                mutation_stddev=0.02,
+                generations=40,
+                mutation_stddev=0.04,
                 fitness_function=fitness_func,
             )
             best_ant, best_loss = ga.run(validity_function)
             with open(os.path.join(output_folder, f'ant_{name[0]}.pickle'),
                       'wb') as ant_handle:
                 env_og_rel_repr = env_to_dict_representation(
-                    torch.tensor(np.load(os.path.join(args.path, 'environment.npy'))[np.newaxis]))[0]
+                    torch.tensor(np.load(os.path.join(sample_path, name[0], 'environment.npy'))[np.newaxis]))[0]
                 with open(os.path.join(output_folder, f'env_{name[0]}.pickle'), 'wb') as env_handle:
                     pickle.dump(env_og_rel_repr, env_handle)
-                best_ant_abs = args.ant_scaler.scaler.inverse(best_ant)
+                best_ant_abs = ant_scaler_manager.scaler.inverse(best_ant)
                 best_ant_og_abs_repr = ant_to_dict_representation(best_ant_abs)[0]
                 best_ant_og_rel_repr = ant_abs2rel(best_ant_og_abs_repr, env_og_rel_repr)
                 pickle.dump(best_ant_og_rel_repr, ant_handle)

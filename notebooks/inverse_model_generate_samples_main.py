@@ -40,8 +40,8 @@ def list_str_to_list(s):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data_path', type=str,
-                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
-parser.add_argument('--test_path', type=str, default=None)
+                    default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_5\processed_data')
+parser.add_argument('--test_path', type=str, default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_5\sub_val_set')
 parser.add_argument('--checkpoint_path', type=str,
                     default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints_inverse\ANT_model_lr_0.0002_hd_512_nr_8_pd_0.95_bs_12_drp_0.3_bounds_-3_3_INFO_updated_directivity.pth')
 parser.add_argument('-o', '--output_folder', type=str, default=None)
@@ -165,8 +165,8 @@ with torch.no_grad():
             GAMMA.to(device), RADIATION.to(device), \
             env_scaler_manager.scaler.forward(ENV).float().to(device)
         print('Working on antenna: ', name[0])
-        # plot_condition((gamma, rad))
-        # plt.show()
+        plot_condition((gamma, rad))
+        plt.show()
         condition = (gamma, rad, env)
         print(f'sampling {args.num_samples} samples for antenna: ', name[0])
         start = time.time()

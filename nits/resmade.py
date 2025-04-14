@@ -376,8 +376,14 @@ class ResidualMADE(nn.Module):
                 environment_condition = self.environment_condition_layers(cond_env)
                 condition_features = torch.cat((spectrum_condition, environment_condition), dim=1)
             elif self.condition_mode == "separated_basic":
-                dropped_features = cond_env.shape[1] - 32  # to fit sizes
-                spectrum_condition = self.spectrum_condition_layers((cond_gamma, cond_rad))[:, dropped_features:]
+                env_wanted_shape = 32
+                if cond_env.shape[1] >= env_wanted_shape:
+                    dropped_features = cond_env.shape[1] - env_wanted_shape  # to fit sizes
+                    spectrum_condition = self.spectrum_condition_layers((cond_gamma, cond_rad))[:, dropped_features:]
+                else:
+                    spectrum_condition = self.spectrum_condition_layers((cond_gamma, cond_rad))
+                    zero_features = torch.zeros(cond_env.shape[0], env_wanted_shape-cond_env.shape[1]).to(cond_env.device)
+                    cond_env = torch.concat((cond_env, zero_features), dim=1)
                 condition_features = torch.cat((spectrum_condition, cond_env), dim=1)
             elif self.condition_mode == "hyper":
                 condition_features = self.condition_features_backbone(cond_gamma, cond_rad, cond_env)

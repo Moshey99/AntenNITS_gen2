@@ -31,7 +31,7 @@ class CircularLoss(nn.Module):
 
 # class CircularLoss(nn.Module):
 #     def forward(self, y_true, y_pred):
-#         delta_theta = torch.atan2(torch.sin(y_pred - y_true), torch.cos(y_pred - y_true))
+#         delta_theta = torch.acos(torch.cos(y_pred - y_true))
 #         loss = torch.abs(delta_theta)
 #         return loss.mean()
 
@@ -101,17 +101,19 @@ class gamma_loss_dB(nn.Module):
             return self.weight * circular_loss
 
     def forward(self, pred, target):
-        pred_magnitude = pred[:, :pred.shape[1] // 2]
+        sep = pred.shape[1] // 2
+        pred_magnitude = pred[:, :sep]
         pred_magnitude_db = gamma_mag_to_dB(pred_magnitude)  # expecting pred in linear scale, convert to dB
         smooth_loss_mag = self.smooth_loss_mag(pred_magnitude)
-        pred_phase = pred[:, pred.shape[1] // 2:]
+        pred_phase = pred[:, sep:]
         smooth_loss_phase = self.smooth_loss_phase(pred_phase)
-        target_magnitude = target[:, :target.shape[1] // 2]  # expecting target in dB
-        target_phase = target[:, target.shape[1] // 2:]
+        target_magnitude = target[:, :sep]  # expecting target in dB
+        target_phase = target[:, sep:]
         mag_loss, phase_loss = self.dB_magnitude_loss(pred_magnitude_db, target_magnitude), self.phase_loss(pred_phase,
                                                                                                             target_phase)
         loss = mag_loss + phase_loss
-        return loss + smooth_loss_mag + smooth_loss_phase
+        # return loss + smooth_loss_mag + smooth_loss_phase
+        return loss
 
 
 class radiation_loss_dB(nn.Module):
@@ -171,7 +173,6 @@ class GammaRad_loss(nn.Module):
     @staticmethod
     def geometry_loss(ant: torch.Tensor):
         loss = ant.abs().mean()
-        print(f'ant_loss: {loss}')
         return loss
 
 

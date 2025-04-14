@@ -14,7 +14,7 @@ from typing import Tuple
 
 
 def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor],
-                   freqs: np.ndarray = np.arange(start=300, stop=3000.1, step=10.8),
+                   freqs: np.ndarray = np.arange(start=2000, stop=6000.1, step=16),
                    plot_type: str = '2d',
                    title: str = '') -> plt.Figure:
     gamma, rad = condition
@@ -34,7 +34,7 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor],
     ax11.plot(freqs, gamma_phase[0].cpu().detach().numpy(), 'r-')
     ax1.set_title('gamma')
     ax1.set_ylabel('amplitude', color='b')
-    ax1.set_ylim([-20, 0])
+    ax1.set_ylim([-23, 0])
     ax11.set_ylim([-np.pi, np.pi])
     ax11.set_ylabel('phase', color='r')
     ax1.set_xlabel('frequency [MHz]')
@@ -53,9 +53,9 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor],
         ax4.set_yticks([])
 
     # Set titles for the radiation pattern subplots
-    ax2.set_title('rad f=1.5GHz')
-    ax3.set_title('rad f=2.1GHz')
-    ax4.set_title('rad f=2.4GHz')
+    ax2.set_title('rad f=2.48GHz')
+    ax3.set_title('rad f=5.15GHz')
+    ax4.set_title('rad f=5.38GHz')
     fig.suptitle(title)
     return fig
 
@@ -63,10 +63,10 @@ def plot_condition(condition: Tuple[torch.Tensor, torch.Tensor],
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data')
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
     parser.add_argument('--checkpoint_path', type=str,
-                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\updated_forward_best_dict.pth")
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data\checkpoints\forward.pth")
     parser.add_argument('--repr_mode', type=str, help='use relative repr. for ant and env', default='abs')
     return parser.parse_args()
 

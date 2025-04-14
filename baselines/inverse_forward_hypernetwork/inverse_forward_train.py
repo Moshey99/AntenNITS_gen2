@@ -17,15 +17,16 @@ import pickle
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str,
-                default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+                default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data")
     parser.add_argument('--forward_checkpoint_path', type=str,
-                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\updated_forward_best_dict.pth")
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data\checkpoints\forward.pth")
     parser.add_argument('--batch_size', type=int, default=12)
     parser.add_argument('--lr', type=float, default=1e-3, help='initial learning rate')
+    parser.add_argument('-wd', '--weight_decay', type=float, default=0.001)
     parser.add_argument('--gamma_schedule', type=float, default=0.95, help='gamma decay rate')
     parser.add_argument('--step_size', type=int, default=1, help='step size for gamma decay')
     parser.add_argument('--rad_range', type=list, default=[-15, 5], help='range of radiation values for scaling')
-    parser.add_argument('--geo_weight', type=float, default=1., help='controls the influence of geometry loss')
+    parser.add_argument('--geo_weight', type=float, default=0., help='controls the influence of geometry loss')
     parser.add_argument('--euc_weight', type=float, default=0., help='weight for euclidean loss in GammaRad loss')
     parser.add_argument('--rad_phase_fac', type=float, default=0., help='weight for phase in radiation loss')
     parser.add_argument('--lamda', type=float, default=0.5, help='weight for radiation in gamma radiation loss')
@@ -64,7 +65,7 @@ if __name__ == "__main__":
         break
     model.load_and_freeze_forward(args.forward_checkpoint_path)
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_schedule)
     keep_training = True
     epoch = 0
@@ -117,8 +118,9 @@ if __name__ == "__main__":
                     env_scaler_manager.scaler.forward(ENV).float().to(device)
                 target = (gamma, radiation)
                 gamma_pred, rad_pred, ant_pred = model(gamma, radiation, env)
-                produce_gamma_stats(gamma, gamma_to_dB(gamma_pred), dataset_type='dB', to_print=True)
-                produce_radiation_stats(radiation, rad_pred, to_print=True)
+                if idx % 100 == 0:
+                    produce_gamma_stats(gamma, gamma_to_dB(gamma_pred), dataset_type='dB', to_print=True)
+                    produce_radiation_stats(radiation, rad_pred, to_print=True)
                 pred = (gamma_pred, rad_pred, ant_pred)
                 loss = loss_fn(pred, target)
                 val_loss += loss.item()

@@ -117,7 +117,16 @@ if __name__ == "__main__":
     print(f'Both improved: {both_improve_counter}')
     print(f'Both improved by a lot: {both_big_improve_counter}')
     print(f'Both worse: {both_worse_counter}')
-    mean_gamma_stats, _ = torch.median(torch.stack(all_gamma_stats), dim=0)
-    mean_rad_stats, _ = torch.median(torch.stack(all_radiation_stats), dim=0)
-    print('Mean gamma stats:', mean_gamma_stats)
-    print('Mean radiation stats:', mean_rad_stats)
+
+    all_gamma_stats = torch.stack(all_gamma_stats)
+    mean_gamma_stats, _ = torch.median(all_gamma_stats, dim=0)
+    std_gamma_stats = torch.std(all_gamma_stats,dim=0)
+    print_gamma_stats = [str(np.round(m.item(),2))+'+-'+str(np.round(s.item(),2)) for m, s in zip(mean_gamma_stats, std_gamma_stats)]
+
+    all_radiation_stats = torch.stack(all_radiation_stats)
+    mean_rad_stats, _ = torch.nanmedian(all_radiation_stats, dim=0)
+    std_rad_stats = torch.tensor(np.nanstd(all_radiation_stats.numpy(), axis=0))
+    print_rad_stats = [str(np.round(m.item(),2))+'+-'+str(np.round(s.item(),2)) for m, s in zip(mean_rad_stats, std_rad_stats)]
+
+    print('Mean gamma stats:', print_gamma_stats)
+    print('Mean radiation stats:', print_rad_stats)

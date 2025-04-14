@@ -21,8 +21,7 @@ if __name__ == '__main__':
     args = parse_args()
     debug = args.debug
     preprocessor = DataPreprocessor(data_path=args.data_path, destination_path=args.destination_path)
-
     preprocessor.antenna_preprocessor(debug=debug) if args.process_antenna else None
     preprocessor.environment_preprocessor(debug=debug) if args.process_environment else None
-    preprocessor.radiation_preprocessor(debug=debug, mode=args.radiation_mode) if args.process_radiation else None
+    preprocessor.radiation_preprocessor(debug=debug, mode=args.radiation_mode, selected_frequencies=[2480, 5150, 5380]) if args.process_radiation else None
     preprocessor.gamma_preprocessor(debug=debug) if args.process_gamma else None

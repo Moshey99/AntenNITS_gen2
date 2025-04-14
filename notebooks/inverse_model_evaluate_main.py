@@ -74,10 +74,10 @@ def extend_to_fit_samples(num_samples: int, env: torch.Tensor, gamma: torch.Tens
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--data_path', type=str,
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k')
+                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data')
     parser.add_argument('--test_path', type=str, default=None)
     parser.add_argument('--forward_checkpoint_path', type=str, help='path to forward checkpoint',
-                        default=r'C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\processed_data_130k_200k\checkpoints\updated_forward_best_dict.pth')
+                        default=r"C:\Users\moshey\PycharmProjects\etof_folder_git\AntennaDesign_data\model_6\processed_data\checkpoints\forward.pth")
     parser.add_argument('--samples_folder_name', type=str, default=None, help='folder base name for samples')
     parser.add_argument('--output_folder_name', type=str, default=None, help='output folder base name')
     parser.add_argument('--repr_mode', type=str, help='use relative or absolute repr. for ant and env', default='abs')
@@ -109,11 +109,11 @@ if __name__ == "__main__":
     model = forward_GammaRad(radiation_channels=12)
     model_init_shape(model, antenna_dataset_loader)
     model.load_state_dict(torch.load(args.forward_checkpoint_path, map_location=device))
-    counted = np.zeros(2)
     with torch.no_grad():
         k = 1
         all_gamma_stats, all_radiation_stats = [], []
         plot_GT_vs_pred = True
+        n_best_samples = 3
         model.eval()
         for idx, (EMBEDDINGS, GAMMA, RADIATION, ENV, name) in enumerate(loader):
             if all([name[0] not in sample_name for sample_name in samples_names]):
@@ -179,13 +179,12 @@ if __name__ == "__main__":
                 axs_gt[0].set_title('GT Antenna')
                 axs_gt[0].axis('off')
 
-                fig, axs = plt.subplots(2, 3, figsize=(15, 10))
+                fig, axs = plt.subplots(2, n_best_samples, figsize=(15, 10))
                 # save env_og_repr
                 with open(os.path.join(output_folder, f'env_{name[0]}.pickle'), 'wb') as env_handle:
                     pickle.dump(env_og_rel_repr, env_handle)
-                for i in [0, 1, 2]:
+                for i in range(n_best_samples):
                     ant_best_og_repr = samples_sorted_og_repr[i]
-                    counted[check_ant_validity(ant_best_og_repr, env_og_rel_repr)] += 1
                     with open(os.path.join(output_folder, f'ant_{name[0]}_grade_{i}.pickle'),
                               'wb') as ant_handle:
                         pickle.dump(ant_best_og_repr, ant_handle)

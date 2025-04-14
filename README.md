@@ -91,6 +91,8 @@ All the scripts that needs to be executed are in **notebooks** folder in this pr
 Each script contains an argument parser with explanation over the arguments.
 
 - **Important note**: Make sure that the data has the same hierarchy as described above. **Unzip the data if it is compressed.**
+- **Important note**: Set environment variable with the name 'MODEL_TYPE' to value that matches the type of the dataset you wish to work with.
+  (currently models 3,5,6 are supported) In pycharm, it can be added in Run Configurations -> Environment Variables.
 
 ## process_data.py
 Takes the original data, as it is provided from the data generator (CST) and returns the processed data,
