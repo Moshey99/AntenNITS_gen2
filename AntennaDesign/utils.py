@@ -31,9 +31,10 @@ from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from shapely.geometry import Polygon
 
-MODEL_TYPE = int(os.environ.get("MODEL_TYPE"))
+MODEL_TYPE = os.environ.get("MODEL_TYPE")
 if MODEL_TYPE is None:
     raise ValueError("Environment variable 'MODEL_TYPE' is not set.")
+MODEL_TYPE = int(MODEL_TYPE)
 assert MODEL_TYPE in [3, 5, 6], 'MODEL_TYPE must be either 3, 5 or 6.'
 EXAMPLE_FOLDER = os.path.join(Path(__file__).parent, 'EXAMPLE', f'model_{MODEL_TYPE}')
 
